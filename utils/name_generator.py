@@ -1,4 +1,5 @@
 import random
+from trainer_lib.permutation_grid import Grid
 
 animals = ["Rabbit",
            "Panda",
@@ -112,9 +113,14 @@ adjectives = ["adorable",
               ]
 
 
-def generate_name(rnd_seed: int | None = None):
+def generate_name(length: int, rnd_seed: int | None = None):
     if rnd_seed:
         random.seed(rnd_seed)
-    adjective = adjectives[random.randint(0, len(adjectives) - 1)]
-    animal = animals[random.randint(0, len(animals) - 1)]
-    return adjective.capitalize() + animal
+
+    grid = Grid({
+        'animal': animals,
+        'adjective': adjectives
+    })
+    indexes = random.sample([i for i in range(len(grid))], length)
+    return list(map(lambda x: f"{x['adjective'].capitalize()}_{x['animal'].capitalize()}", grid[indexes]))
+
