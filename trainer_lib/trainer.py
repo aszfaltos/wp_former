@@ -32,7 +32,7 @@ class Trainer:
 
             for step, (src_data, tgt_data) in enumerate(train_loader):
                 optimizer.zero_grad()
-                ones = torch.ones(tgt_data.shape[0], 1, 1)
+                ones = torch.ones(tgt_data.shape[0], 1, tgt_data.shape[-1])
                 output = self.model(src_data, torch.concat((ones, tgt_data[:, :-1]), dim=1))
                 loss = train_criterion(output, tgt_data)
                 loss.backward()
@@ -51,7 +51,7 @@ class Trainer:
         self.model.eval()
         eval_loss = 0
         for src_data, tgt_data in data_loader:
-            ones = torch.ones(tgt_data.shape[0], 1, 1)
+            ones = torch.ones(tgt_data.shape[0], 1, tgt_data.shape[-1])
             out = ones
             for _ in range(tgt_data.shape[1]):
                 out = torch.concat((ones, self.model(src_data, out)), dim=1)

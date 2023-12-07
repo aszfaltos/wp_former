@@ -127,9 +127,14 @@ class Transformer(nn.Module):
                  num_layers,
                  d_ff,
                  enc_seq_length,
+                 enc_window,
                  dec_seq_length,
+                 dec_window,
                  dropout):
         super(Transformer, self).__init__()
+        self.enc_window = enc_window
+        self.dec_window = dec_window
+
         self.W_encoder = nn.Linear(src_size, d_model)
         self.W_decoder = nn.Linear(tgt_size, d_model)
 
