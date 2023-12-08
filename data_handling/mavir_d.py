@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 from requests import get as req_get
 import pandas as pd
 import atexit
@@ -48,8 +49,8 @@ def download_from_to(name: str, from_time: int, to_time: int):
            f"?exportType=xlsx"
            f"&fromTime={from_time}"
            f"&toTime={to_time}"
-           f"&periodType=hour"
-           f"&period=1")
+           f"&periodType=min"
+           f"&period=10")
 
     temp_path = f"temp_data/{name}.xlsx"
     response = req_get(url, timeout=240)
@@ -82,19 +83,25 @@ def main():
     to_time = to_time.replace(minute=0, second=0, microsecond=0)
     to_time = pd.to_datetime(
             to_time, format='%Y-%m-%d %H:%M:%S') - pd.Timedelta(hours=2)
-    to_in_ms = int(to_time.value / 1e6)
 
-    # I'll split the request into 2 parts, because the request fails if it's too long (more than 60_000 lines)
-    # realistically, we will never need more than 120_000 lines at once
-    middle_time = from_time + (to_time - from_time) / 2
-    middle_time = pd.to_datetime(middle_time)
-    middle_time = middle_time.replace(minute=0, second=0, microsecond=0)
-    middle_in_ms = int(middle_time.value / 1e6)
+    # I'll split the request into n parts, because the request fails if it's too long (more than 60_000 lines)
+    n = 5
+    fraction_time = from_time + (to_time - from_time) / n
+    fraction_time = pd.to_datetime(fraction_time)
+    fraction_time = fraction_time.replace(minute=0, second=0, microsecond=0)
+    fraction_in_ms = int(fraction_time.value / 1e6)
 
-    df1 = download_from_to('mavir_1', from_in_ms, middle_in_ms)
-    df2 = download_from_to('mavir_2', middle_in_ms, to_in_ms)
-    if isinstance(df1, pd.DataFrame) and isinstance(df2, pd.DataFrame):
-        pd.concat([df1, df2]).to_csv('../data/mavir_data/mavir.csv', sep=';')
+    dfs = []
+    # Sleep is needed to not spam the api
+    sleep_time = 5
+    for i in range(0, n):
+        df = download_from_to(f'mavir_{i}', from_in_ms+i*fraction_in_ms, from_in_ms+(i+1)*fraction_in_ms)
+        if isinstance(df, pd.DataFrame):
+            dfs.append(df)
+
+        time.sleep(sleep_time)
+
+    pd.concat(dfs).to_csv('../data/mavir_data/mavir.csv', sep=';')
 
     if not os.path.exists('mavir_data'):
         os.makedirs('mavir_data')
