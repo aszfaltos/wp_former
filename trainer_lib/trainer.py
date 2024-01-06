@@ -53,7 +53,9 @@ class Trainer:
 
             self.metrics['train']['MSE'].append(train_loss)
             stop = self._evaluate(valid_loader, criterion, early_stopper)
-            checkpoint(self.model, os.path.join(self.save_path, f'Epoch_{epoch + 1}.pth'))
+
+            if early_stopper.min_validation_loss == self.metrics['eval']['MSE'][-1]:
+                checkpoint(self.model, os.path.join(self.save_path, 'best_mse.pth'))
             if stop:
                 print(f'Stopped after {epoch + 1} epochs.')
                 break
