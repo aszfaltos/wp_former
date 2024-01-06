@@ -23,10 +23,8 @@ def exiting():
 
 def format_mavir(dataframe: pd.DataFrame):
     dataframe.columns = dataframe.columns.str.strip()
-    dataframe['Time'] = (pd.to_datetime(
-        dataframe['Időpont'], utc=True)).tz_localize(None)
-    dataframe.index = dataframe['Time']
-    dataframe.drop(['Time', 'Időpont'], axis=1, inplace=True)
+    dataframe.index = pd.to_datetime(dataframe['Időpont'], utc=True)
+    dataframe.drop(['Időpont'], axis=1, inplace=True)
     dataframe.dropna(axis=0, inplace=True)
     dataframe.drop(['Szélerőművek becsült termelése (aktuális)',
                     'Szélerőművek becsült termelése (dayahead)',
@@ -54,12 +52,14 @@ def download_from_to(name: str, from_time: int, to_time: int):
 
     temp_path = f"temp_data/{name}.xlsx"
     response = req_get(url, timeout=240)
+
     if response.status_code == 200:
         with open(temp_path, 'wb') as f:
             f.write(response.content)
             print(f"Downloaded {temp_path}")
     else:
         print(f"Error {response.status_code} for request", file=sys.stderr)
+        print(f"Error message: {response.content.decode()}", file=sys.stderr)
         return 1
 
     # suppress default style warning
@@ -85,10 +85,8 @@ def main():
             to_time, format='%Y-%m-%d %H:%M:%S') - pd.Timedelta(hours=2)
 
     # I'll split the request into n parts, because the request fails if it's too long (more than 60_000 lines)
-    n = 5
-    fraction_time = from_time + (to_time - from_time) / n
-    fraction_time = pd.to_datetime(fraction_time)
-    fraction_time = fraction_time.replace(minute=0, second=0, microsecond=0)
+    n = 10
+    fraction_time = pd.to_timedelta((to_time - from_time) / n)
     fraction_in_ms = int(fraction_time.value / 1e6)
 
     dfs = []
