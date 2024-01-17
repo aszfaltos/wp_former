@@ -1,50 +1,73 @@
 import math
 import os.path
-from torch.utils.data import DataLoader
-from torch import nn, optim
+import json
+from dataclasses import dataclass
+
 import torch
-from .utils import checkpoint
+from torch import nn, optim
+from torch.utils.data import DataLoader
+
 from .early_stop import EarlyStopper
+from .utils import checkpoint
+
+
+@dataclass
+class TrainerOptions:
+    batch_size: int
+    epochs: int
+
+    learning_rate: float
+    weight_decay: float
+    warmup_steps: int
+    warmup_start_factor: float
+    gradient_accumulation_steps: int
+
+    early_stopping_patience: int
+    early_stopping_min_delta: float
+
+    save_every_n_epochs: int
+    save_path: str
 
 
 class Trainer:
     def __init__(self,
                  model: torch.nn.Module,
-                 save_path: str,
-                 batch_size=8,
-                 epochs=5):
-        self.batch_size = batch_size
+                 opts: TrainerOptions):
         self.model = model
-        self.epochs = epochs
-        self.metrics = {'train': {'MSE': []}, 'eval': {'MSE': [], 'RMSE': [], 'MAE': []}}
-        self.save_path = save_path
-        os.makedirs(self.save_path, exist_ok=True)
+        self.opts = opts
+        self.metrics = {'train': {'MSE': []}, 'eval': {'MSE': [], 'RMSE': [], 'MAE': [], 'MAPE': []}}
+        os.makedirs(self.opts.save_path, exist_ok=True)
 
     def train(self, train_data, valid_data):
-        early_stopper = EarlyStopper(10, 0.1)
-        optimizer = optim.Adam(self.model.parameters(), lr=1e-3, betas=(0.9, 0.98), eps=1e-9)
+        early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9)
 
-        warmup = optim.lr_scheduler.LinearLR(optimizer, 5*1e-3, 1.0, total_iters=10)
+        warmup = optim.lr_scheduler.LinearLR(optimizer, self.opts.warmup_start_factor, 1.0,
+                                             total_iters=self.opts.warmup_steps)
         exp_sch = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
-        scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup, exp_sch], [5])
+        scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup, exp_sch], [self.opts.warmup_steps])
 
-        criterion = nn.MSELoss()
+        mse = nn.MSELoss()
 
-        train_loader = DataLoader(train_data, self.batch_size)
-        valid_loader = DataLoader(valid_data, self.batch_size)
+        train_loader = DataLoader(train_data, self.opts.batch_size)
+        valid_loader = DataLoader(valid_data, self.opts.batch_size)
         print(f'Train size: {len(train_data)}, Validation size: {len(valid_data)}')
 
-        for epoch in range(self.epochs):
+        for epoch in range(self.opts.epochs):
             train_loss = 0
 
-            for step, (src_data, tgt_data) in enumerate(train_loader):
-                optimizer.zero_grad()
-                ones = torch.ones(tgt_data.shape[0], 1, tgt_data.shape[-1])
-                output = self.model(src_data, torch.concat((ones, tgt_data[:, :-1]), dim=1))
-                loss = criterion(output, tgt_data)
-                loss.backward()
-                optimizer.step()
+            for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
+                output = self.model(src_data, tgt_data[:, :-1])
+                loss = mse(output, tgt_data[:, 1:])
                 train_loss += loss.item() / len(train_loader)
+                loss = loss / self.opts.gradient_accumulation_steps
+                loss.backward()
+
+                if ((batch_idx + 1) % self.opts.gradient_accumulation_steps == 0) or \
+                        (batch_idx + 1 == len(train_loader)):
+                    optimizer.step()
+                    optimizer.zero_grad()
+
             scheduler.step()
 
             print(
@@ -52,33 +75,58 @@ class Trainer:
                 end='')
 
             self.metrics['train']['MSE'].append(train_loss)
-            stop = self._evaluate(valid_loader, criterion, early_stopper)
+            stop = self._evaluate(valid_loader, early_stopper)
 
-            if early_stopper.min_validation_loss == self.metrics['eval']['MSE'][-1]:
-                checkpoint(self.model, os.path.join(self.save_path, 'best_mse.pth'))
-            if stop:
+            if (epoch + 1) % self.opts.save_every_n_epochs == 0 or (epoch + 1) == self.opts.epochs:
+                checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
+                # with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
+                    # json.dump(self.metrics, fp)
+
+                if stop:
+                    print(f'Stopped after {epoch + 1} epochs.')
+                    break
+
+            elif stop:
+                checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
+                # with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
+                    # json.dump(self.metrics, fp)
                 print(f'Stopped after {epoch + 1} epochs.')
                 break
 
-    def _evaluate(self, data_loader, criterion, early_stopper: EarlyStopper):
-        mae = nn.L1Loss()
+    def _evaluate(self, data_loader, early_stopper: EarlyStopper):
         self.model.eval()
-        eval_loss = 0
+
+        mse = nn.MSELoss()
+        mae = nn.L1Loss()
+        mse_loss = 0
+        rmse_loss = 0
         mae_loss = 0
+        mape_loss = 0
+
         with torch.no_grad():
             for src_data, tgt_data in data_loader:
-                ones = torch.ones(tgt_data.shape[0], 1, tgt_data.shape[-1])
+                ones = tgt_data[:, 0, :].reshape(tgt_data.shape[0], 1, tgt_data.shape[-1])
                 out = ones
-                for _ in range(tgt_data.shape[1]):
+                for _ in range(tgt_data.shape[1] - 1):
                     out = torch.concat((ones, self.model(src_data, out)), dim=1)
-                loss = criterion(out[:, 1:], tgt_data)
-                eval_loss += loss.item() / len(data_loader)
-                mae_loss += mae(out[:, 1:], tgt_data) / len(data_loader)
 
-            print(f"; Eval - MSE: {eval_loss}, RMSE: {math.sqrt(eval_loss)}, MAE: {mae_loss}")
+                loss = mse(out[:, 1:], tgt_data[:, 1:])
+                mse_loss += loss.item() / len(data_loader)
+                rmse_loss += math.sqrt(loss.item()) / len(data_loader)
+                mae_loss += mae(out[:, 1:], tgt_data[:, 1:]) / len(data_loader)
+                mape_loss += mae_loss / sum(tgt_data.reshape(-1))
 
-            self.metrics['eval']['MSE'].append(eval_loss)
-            self.metrics['eval']['RMSE'].append(math.sqrt(eval_loss))
+            print(
+                f"; Eval - MSE: {mse_loss}," +
+                f" RMSE: {rmse_loss}," +
+                f" MAE: {mae_loss}," +
+                f" MAPE: {1 - mape_loss}")
+
+            self.metrics['eval']['MSE'].append(mse_loss)
+            self.metrics['eval']['RMSE'].append(rmse_loss)
             self.metrics['eval']['MAE'].append(mae_loss)
+            self.metrics['eval']['MAPE'].append(mape_loss)
+
         self.model.train()
-        return early_stopper.early_stop(eval_loss)
+
+        return early_stopper.early_stop(mse_loss)

@@ -1,5 +1,6 @@
 import copy
 from functools import reduce
+from typing import Union, List
 
 
 class Grid:
@@ -15,13 +16,13 @@ class Grid:
     def __iter__(self):
         return copy.deepcopy(self)
 
-    def __next__(self):
+    def __next__(self) -> dict:
         if len(self._combinations) > 0:
             return dict(zip(self._keys, self._combinations.pop(0)))
         else:
             raise StopIteration()
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Union[dict, List[dict]]:
         if type(idx) is list:
             return [dict(zip(self._keys, self._combinations[i])) for i in idx]
         return dict(zip(self._keys, self._combinations[idx]))

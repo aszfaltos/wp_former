@@ -1,2 +1,2 @@
-__all__ = ['Transformer']
-from .transformer import Transformer
+__all__ = ['Transformer', 'TransformerParams']
+from .transformer import Transformer, TransformerParams

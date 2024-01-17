@@ -1,6 +1,7 @@
 import torch
 from torch import nn, Tensor
 import math
+from dataclasses import dataclass
 
 
 class MultiHeadAttention(nn.Module):
@@ -118,39 +119,41 @@ class DecoderLayer(nn.Module):
         return x
 
 
+@dataclass
+class TransformerParams:
+    src_size: int
+    tgt_size: int
+
+    d_model: int
+    num_heads: int
+    num_layers: int
+    d_ff: int
+
+    max_seq_length: int
+
+    dropout: float
+
+
 class Transformer(nn.Module):
     def __init__(self,
-                 src_size,
-                 tgt_size,
-                 d_model,
-                 num_heads,
-                 num_layers,
-                 d_ff,
-                 enc_seq_length,
-                 enc_window,
-                 dec_seq_length,
-                 dec_window,
-                 dropout):
+                 params: TransformerParams):
         super(Transformer, self).__init__()
-        self.enc_window = enc_window
-        self.dec_window = dec_window
+        self.W_encoder = nn.Linear(params.src_size, params.d_model)
+        self.W_decoder = nn.Linear(params.tgt_size, params.d_model)
 
-        self.W_encoder = nn.Linear(src_size, d_model)
-        self.W_decoder = nn.Linear(tgt_size, d_model)
-
-        self.positional_encoding = PositionalEncoding(d_model, max(enc_seq_length, dec_seq_length))
+        self.positional_encoding = PositionalEncoding(params.d_model, params.max_seq_length)
 
         self.enc_layers = nn.ModuleList([
-            EncoderLayer(d_model, num_heads, d_ff, dropout)
-            for _ in range(num_layers)
+            EncoderLayer(params.d_model, params.num_heads, params.d_ff, params.dropout)
+            for _ in range(params.num_layers)
         ])
         self.dec_layers = nn.ModuleList([
-            DecoderLayer(d_model, num_heads, d_ff, dropout)
-            for _ in range(num_layers)
+            DecoderLayer(params.d_model, params.num_heads, params.d_ff, params.dropout)
+            for _ in range(params.num_layers)
         ])
 
-        self.fc = nn.Linear(d_model, tgt_size)
-        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(params.d_model, params.tgt_size)
+        self.dropout = nn.Dropout(params.dropout)
 
         for p in self.parameters():
             nn.init.normal_(p, 0, .2)
