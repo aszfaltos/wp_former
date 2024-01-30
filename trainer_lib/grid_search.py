@@ -1,8 +1,9 @@
 import os.path
 from dataclasses import dataclass
+import json
 
 from numpy import ndarray
-from torch import nn, Tensor
+from torch import Tensor
 from torch.utils.data import random_split
 
 import utils
@@ -26,7 +27,6 @@ def transformer_grid_search(grid: Grid,
                             trainer_options: TrainerOptions,
                             opts: GridSearchOptions):
     path = os.path.abspath(opts.root_save_path)
-    models = []
     names = utils.generate_name(len(grid), opts.random_seed)
 
     for idx, params in enumerate(grid):
@@ -58,12 +58,9 @@ def transformer_grid_search(grid: Grid,
         model = Transformer(transformer_params)
 
         trainer_options.save_path = os.path.join(path, names[idx])
+        os.makedirs(trainer_options.save_path, exist_ok=True)
+        with open(os.path.join(trainer_options.save_path, 'params.json'), "w") as fp:
+            json.dump(params, fp)
+
         trainer = Trainer(model, trainer_options)
-
         trainer.train(train, valid)
-        models.append({'name': names[idx],
-                       'model': trainer.model,
-                       'params': params,
-                       'metrics': trainer.metrics})
-
-    return models

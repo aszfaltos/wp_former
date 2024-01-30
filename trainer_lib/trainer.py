@@ -54,12 +54,12 @@ class Trainer:
         print(f'Train size: {len(train_data)}, Validation size: {len(valid_data)}')
 
         for epoch in range(self.opts.epochs):
-            train_loss = 0
+            train_loss: float = 0
 
             for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
                 output = self.model(src_data, tgt_data[:, :-1])
                 loss = mse(output, tgt_data[:, 1:])
-                train_loss += loss.item() / len(train_loader)
+                train_loss += float(loss.item()) / len(train_loader)
                 loss = loss / self.opts.gradient_accumulation_steps
                 loss.backward()
 
@@ -79,8 +79,8 @@ class Trainer:
 
             if (epoch + 1) % self.opts.save_every_n_epochs == 0 or (epoch + 1) == self.opts.epochs:
                 checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
-                # with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
-                    # json.dump(self.metrics, fp)
+                with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
+                    json.dump(self.metrics, fp)
 
                 if stop:
                     print(f'Stopped after {epoch + 1} epochs.')
@@ -88,8 +88,8 @@ class Trainer:
 
             elif stop:
                 checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
-                # with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
-                    # json.dump(self.metrics, fp)
+                with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
+                    json.dump(self.metrics, fp)
                 print(f'Stopped after {epoch + 1} epochs.')
                 break
 
@@ -98,10 +98,10 @@ class Trainer:
 
         mse = nn.MSELoss()
         mae = nn.L1Loss()
-        mse_loss = 0
-        rmse_loss = 0
-        mae_loss = 0
-        mape_loss = 0
+        mse_loss: float = 0
+        rmse_loss: float = 0
+        mae_loss: float = 0
+        mape_loss: float = 0
 
         with torch.no_grad():
             for src_data, tgt_data in data_loader:
@@ -111,17 +111,17 @@ class Trainer:
                     out = torch.concat((ones, self.model(src_data, out)), dim=1)
 
                 loss = mse(out[:, 1:], tgt_data[:, 1:])
-                mse_loss += loss.item() / len(data_loader)
-                rmse_loss += math.sqrt(loss.item()) / len(data_loader)
-                mae_loss += mae(out[:, 1:], tgt_data[:, 1:]) / len(data_loader)
-                mape_loss += mae_loss / sum(tgt_data.reshape(-1))
+                mse_loss += float(loss.item()) / len(data_loader)
+                rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
+                mae_loss += float(mae(out[:, 1:], tgt_data[:, 1:]).item()) / len(data_loader)
+                mape_loss += mae_loss / float(sum(tgt_data.reshape(-1)))
 
             print(
                 f"; Eval - MSE: {mse_loss}," +
                 f" RMSE: {rmse_loss}," +
                 f" MAE: {mae_loss}," +
-                f" MAPE: {1 - mape_loss}")
-
+                f" MAPE: {mape_loss}")
+            
             self.metrics['eval']['MSE'].append(mse_loss)
             self.metrics['eval']['RMSE'].append(rmse_loss)
             self.metrics['eval']['MAE'].append(mae_loss)
