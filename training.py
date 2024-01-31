@@ -45,9 +45,9 @@ def train_regular_transformer(training_data):
 
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/regular/',
-        valid_split=0.2,
+        valid_split=0.35,
         window_step_size=4,
-        random_seed=42,
+        random_seed=43,
         use_start_token=True
     )
 
@@ -86,9 +86,9 @@ def train_eemd_transformer(training_data):
 
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/eemd/',
-        valid_split=0.2,
+        valid_split=0.35,
         window_step_size=4,
-        random_seed=42,
+        random_seed=43,
         use_start_token=True
     )
 
@@ -96,12 +96,12 @@ def train_eemd_transformer(training_data):
 
 
 def main():
-    sample = load_data(5000, 0)
+    sample = load_data(10000, 0)
     print('data loaded')
     training_data_regular = np.array(sample['Power'].to_numpy()[..., np.newaxis], dtype=np.float32)
     print('regular train data prepared')
 
-    decomposed = eemd.EEMDWrapper(sample['Power'].to_numpy())
+    decomposed = eemd.EEMDWrapper(sample['Power'].to_numpy(), 3)
     training_data_eemd = np.array(np.concatenate([decomposed.get_imfs().transpose(),
                                                   decomposed.get_residue()[..., np.newaxis]], dtype=np.float32, axis=1))
     print('eemd train data prepared')

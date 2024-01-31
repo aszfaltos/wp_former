@@ -40,7 +40,8 @@ class Trainer:
 
     def train(self, train_data, valid_data):
         early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
-        optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9,
+                               weight_decay=self.opts.weight_decay)
 
         warmup = optim.lr_scheduler.LinearLR(optimizer, self.opts.warmup_start_factor, 1.0,
                                              total_iters=self.opts.warmup_steps)
@@ -75,7 +76,7 @@ class Trainer:
                 end='')
 
             self.metrics['train']['MSE'].append(train_loss)
-            stop = self._evaluate(valid_loader, early_stopper)
+            stop = self._evaluate(valid_loader, early_stopper, mse)
 
             if (epoch + 1) % self.opts.save_every_n_epochs == 0 or (epoch + 1) == self.opts.epochs:
                 checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
@@ -93,10 +94,9 @@ class Trainer:
                 print(f'Stopped after {epoch + 1} epochs.')
                 break
 
-    def _evaluate(self, data_loader, early_stopper: EarlyStopper):
+    def _evaluate(self, data_loader, early_stopper: EarlyStopper, mse: nn.MSELoss):
         self.model.eval()
 
-        mse = nn.MSELoss()
         mae = nn.L1Loss()
         mse_loss: float = 0
         rmse_loss: float = 0
@@ -120,7 +120,7 @@ class Trainer:
                 f"; Eval - MSE: {mse_loss}," +
                 f" RMSE: {rmse_loss}," +
                 f" MAE: {mae_loss}," +
-                f" MAPE: {mape_loss}")
+                f" MAPE: {round(mape_loss * 100, 2)}")
             
             self.metrics['eval']['MSE'].append(mse_loss)
             self.metrics['eval']['RMSE'].append(rmse_loss)
