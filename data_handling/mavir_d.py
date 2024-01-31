@@ -93,6 +93,7 @@ def main():
     # Sleep is needed to not spam the api
     sleep_time = 5
     for i in range(0, n):
+        print(f"{i}. fragment")
         df = download_from_to(f'mavir_{i}', from_in_ms+i*fraction_in_ms, from_in_ms+(i+1)*fraction_in_ms)
         if isinstance(df, pd.DataFrame):
             dfs.append(df)
