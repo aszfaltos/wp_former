@@ -1,5 +1,4 @@
 *.ipynb
-data/
 tmp/
 trained/
 venv/
