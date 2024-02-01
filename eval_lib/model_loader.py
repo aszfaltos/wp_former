@@ -5,7 +5,7 @@ from models import TransformerParams
 from trainer_lib.utils import resume
 
 
-def load_model(test: str, name: str, epoch: int, model_type: torch.nn.Module, path: str = 'trained'):
+def load_model(test: str, name: str, epoch: int, model_type: type, path: str = 'trained'):
     path = os.path.join(path, test, name)
     with open(os.path.join(path, 'params.json'), 'r') as fp:
         params = json.load(fp)
