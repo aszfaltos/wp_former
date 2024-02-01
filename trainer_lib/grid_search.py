@@ -11,19 +11,21 @@ from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDataset
 from .permutation_grid import Grid
 from .trainer import Trainer, TrainerOptions
 from models import Transformer, TransformerParams
+import numpy as np
 
 
 @dataclass
 class GridSearchOptions:
     root_save_path: str
     valid_split: float
+    test_split: float
     window_step_size: int
     random_seed: int
     use_start_token: bool
 
 
 def transformer_grid_search(grid: Grid,
-                            data: ndarray | Tensor,
+                            data: ndarray,
                             trainer_options: TrainerOptions,
                             opts: GridSearchOptions):
     path = os.path.abspath(opts.root_save_path)
@@ -32,18 +34,45 @@ def transformer_grid_search(grid: Grid,
     for idx, params in enumerate(grid):
         params = dict(params)  # to help the typechecker not kill itself
 
-        dataset = TimeSeriesWindowedTensorDataset(data,
-                                                  TimeSeriesWindowedDatasetConfig(
-                                                      params['src_window'],
-                                                      params['tgt_window'],
-                                                      params['src_seq_length'],
-                                                      params['tgt_seq_length'],
-                                                      opts.window_step_size,
-                                                      opts.use_start_token)
-                                                  )
+        valid_size = int(round(len(data) * opts.valid_split))
+        test_size = int(round(len(data) * opts.test_split))
 
-        valid_size = int(round(len(dataset) * opts.valid_split))
-        train, valid = random_split(dataset, [len(dataset) - valid_size, valid_size])
+        indices = np.random.permutation(data.shape[0])
+        train_idx, valid_idx, test_idx = (indices[:-valid_size-test_size],
+                                          indices[-valid_size-test_size:-test_size],
+                                          indices[-test_size:])
+
+        train, valid, test = data[train_idx,], data[valid_idx,], data[test_idx,]
+
+        train_dataset = TimeSeriesWindowedTensorDataset(train,
+                                                        TimeSeriesWindowedDatasetConfig(
+                                                          params['src_window'],
+                                                          params['tgt_window'],
+                                                          params['src_seq_length'],
+                                                          params['tgt_seq_length'],
+                                                          opts.window_step_size,
+                                                          opts.use_start_token)
+                                                        )
+
+        valid_dataset = TimeSeriesWindowedTensorDataset(valid,
+                                                        TimeSeriesWindowedDatasetConfig(
+                                                            params['src_window'],
+                                                            params['tgt_window'],
+                                                            params['src_seq_length'],
+                                                            params['tgt_seq_length'],
+                                                            opts.window_step_size,
+                                                            opts.use_start_token)
+                                                        )
+
+        test_dataset = TimeSeriesWindowedTensorDataset(test,
+                                                       TimeSeriesWindowedDatasetConfig(
+                                                           params['src_window'],
+                                                           params['tgt_window'],
+                                                           params['src_seq_length'],
+                                                           params['tgt_seq_length'],
+                                                           opts.window_step_size,
+                                                           opts.use_start_token)
+                                                       )
 
         transformer_params = TransformerParams(
             src_size=params['src_size'] * params['src_window'],
@@ -63,4 +92,4 @@ def transformer_grid_search(grid: Grid,
             json.dump(params, fp)
 
         trainer = Trainer(model, trainer_options)
-        trainer.train(train, valid)
+        trainer.train(train_dataset, valid_dataset, test_dataset)

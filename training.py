@@ -24,7 +24,7 @@ def train_regular_transformer(training_data):
         'src_seq_length': [24],
         'tgt_seq_length': [3],
         'src_window': [8],
-        'tgt_window': [8],
+        'tgt_window': [2],
         'dropout': [0.2],
     }
     grid = Grid(params)
@@ -46,6 +46,7 @@ def train_regular_transformer(training_data):
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/regular/',
         valid_split=0.2,
+        test_split=0.2,
         window_step_size=4,
         random_seed=44,
         use_start_token=True
@@ -65,7 +66,7 @@ def train_eemd_transformer(training_data):
         'src_seq_length': [24],
         'tgt_seq_length': [3],
         'src_window': [8],
-        'tgt_window': [8],
+        'tgt_window': [2],
         'dropout': [0.2],
     }
     grid = Grid(params)
@@ -87,6 +88,7 @@ def train_eemd_transformer(training_data):
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/eemd/',
         valid_split=0.2,
+        test_split=0.2,
         window_step_size=4,
         random_seed=44,
         use_start_token=True

@@ -35,10 +35,12 @@ class Trainer:
                  opts: TrainerOptions):
         self.model = model
         self.opts = opts
-        self.metrics = {'train': {'MSE': []}, 'eval': {'MSE': [], 'RMSE': [], 'MAE': [], 'MAPE': []}}
+        self.metrics = {'train': {'MSE': []},
+                        'eval': {'MSE': [], 'RMSE': [], 'MAE': [], 'MAPE': []},
+                        'test': {'MSE': .0, 'RMSE': .0, 'MAE': .0, 'MAPE': .0}}
         os.makedirs(self.opts.save_path, exist_ok=True)
 
-    def train(self, train_data, valid_data):
+    def train(self, train_data, valid_data, test_data):
         early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
         optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9,
                                weight_decay=self.opts.weight_decay)
@@ -52,9 +54,12 @@ class Trainer:
 
         train_loader = DataLoader(train_data, self.opts.batch_size)
         valid_loader = DataLoader(valid_data, self.opts.batch_size)
-        print(f'Train size: {len(train_data)}, Validation size: {len(valid_data)}')
+        test_loader = DataLoader(test_data, self.opts.batch_size)
+        print(f'Train size: {len(train_data)}, Validation size: {len(valid_data)}, Test size: {len(valid_data)}')
 
+        last_epoch = 0
         for epoch in range(self.opts.epochs):
+            last_epoch = epoch
             train_loss: float = 0
 
             for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
@@ -76,27 +81,26 @@ class Trainer:
                 end='')
 
             self.metrics['train']['MSE'].append(train_loss)
-            stop = self._evaluate(valid_loader, early_stopper, mse)
+            stop = self._evaluate(valid_loader, early_stopper)
 
-            if (epoch + 1) % self.opts.save_every_n_epochs == 0 or (epoch + 1) == self.opts.epochs:
+            if (epoch + 1) % self.opts.save_every_n_epochs == 0:
                 checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
                 with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
                     json.dump(self.metrics, fp)
 
-                if stop:
-                    print(f'Stopped after {epoch + 1} epochs.')
-                    break
-
-            elif stop:
-                checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
-                with open(os.path.join(self.opts.save_path, f'{epoch + 1}.json'), "w") as fp:
-                    json.dump(self.metrics, fp)
+            if stop:
                 print(f'Stopped after {epoch + 1} epochs.')
                 break
 
-    def _evaluate(self, data_loader, early_stopper: EarlyStopper, mse: nn.MSELoss):
+        self._test_model(test_loader)
+        checkpoint(self.model, os.path.join(self.opts.save_path, f'{last_epoch + 1}.pth'))
+        with open(os.path.join(self.opts.save_path, f'{last_epoch + 1}.json'), "w") as fp:
+            json.dump(self.metrics, fp)
+
+    def _calc_metrics(self, data_loader):
         self.model.eval()
 
+        mse = nn.MSELoss()
         mae = nn.L1Loss()
         mse_loss: float = 0
         rmse_loss: float = 0
@@ -116,17 +120,38 @@ class Trainer:
                 mae_loss += float(mae(out[:, 1:], tgt_data[:, 1:]).item()) / len(data_loader)
                 mape_loss += mae_loss / float(sum(tgt_data.reshape(-1)))
 
-            print(
-                f"; Eval - MSE: {mse_loss}," +
-                f" RMSE: {rmse_loss}," +
-                f" MAE: {mae_loss}," +
-                f" MAPE: {round(mape_loss * 100, 2)}")
-            
-            self.metrics['eval']['MSE'].append(mse_loss)
-            self.metrics['eval']['RMSE'].append(rmse_loss)
-            self.metrics['eval']['MAE'].append(mae_loss)
-            self.metrics['eval']['MAPE'].append(mape_loss)
-
         self.model.train()
 
-        return early_stopper.early_stop(mse_loss)
+        return mse_loss, rmse_loss, mae_loss, mape_loss
+
+    def _evaluate(self, data_loader, early_stopper: EarlyStopper):
+        mse, rmse, mae, mape = self._calc_metrics(data_loader)
+
+        print(
+            f"; Eval - MSE: {mse}," +
+            f" RMSE: {rmse}," +
+            f" MAE: {mae}," +
+            f" MAPE: {round(mape * 100, 2)}")
+
+        self.metrics['eval']['MSE'].append(mse)
+        self.metrics['eval']['RMSE'].append(rmse)
+        self.metrics['eval']['MAE'].append(mae)
+        self.metrics['eval']['MAPE'].append(mape)
+
+        return early_stopper.early_stop(mse)
+
+    def _test_model(self, data_loader):
+        mse, rmse, mae, mape = self._calc_metrics(data_loader)
+
+        print("-----------------------")
+        print(
+            f"Test - MSE: {mse}," +
+            f" RMSE: {rmse}," +
+            f" MAE: {mae}," +
+            f" MAPE: {round(mape * 100, 2)}")
+        print("-----------------------\n")
+
+        self.metrics['test']['MSE'] = mse
+        self.metrics['test']['RMSE'] = rmse
+        self.metrics['test']['MAE'] = mae
+        self.metrics['test']['MAPE'] = mape
