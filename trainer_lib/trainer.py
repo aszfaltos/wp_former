@@ -17,6 +17,7 @@ class TrainerOptions:
     epochs: int
 
     learning_rate: float
+    learning_rate_decay: float
     weight_decay: float
     warmup_steps: int
     warmup_start_factor: float
@@ -47,7 +48,7 @@ class Trainer:
 
         warmup = optim.lr_scheduler.LinearLR(optimizer, self.opts.warmup_start_factor, 1.0,
                                              total_iters=self.opts.warmup_steps)
-        exp_sch = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+        exp_sch = optim.lr_scheduler.ExponentialLR(optimizer, self.opts.learning_rate_decay)
         scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup, exp_sch], [self.opts.warmup_steps])
 
         mse = nn.MSELoss()
