@@ -17,15 +17,15 @@ def set_default_options(src_size, tgt_size):
     params = {
         'src_size': [src_size],
         'tgt_size': [tgt_size],
-        'd_model': [256],
+        'd_model': [128],
         'num_heads': [2],
-        'num_layers': [2],
-        'd_ff': [1024],
+        'num_layers': [1],
+        'd_ff': [256],
         'src_seq_length': [24],
         'tgt_seq_length': [1],
         'src_window': [8],
         'tgt_window': [1],
-        'dropout': [0.2],
+        'dropout': [0.1],
     }
     grid = Grid(params)
 
@@ -33,12 +33,12 @@ def set_default_options(src_size, tgt_size):
         batch_size=8,
         epochs=30,
         learning_rate=1e-4,
-        learning_rate_decay=0.95,
-        weight_decay=1e-4,
+        learning_rate_decay=.99,
+        weight_decay=1e-5,
         warmup_steps=10,
         warmup_start_factor=1e-6,
         gradient_accumulation_steps=8,
-        early_stopping_patience=5,
+        early_stopping_patience=10,
         early_stopping_min_delta=0.01,
         save_every_n_epochs=5,
         save_path=''
@@ -54,7 +54,7 @@ def train_regular_transformer(training_data):
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
-        random_seed=45,
+        random_seed=46,
         use_start_token=True
     )
 
@@ -69,7 +69,7 @@ def train_eemd_transformer(training_data):
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
-        random_seed=45,
+        random_seed=46,
         use_start_token=True
     )
 
@@ -84,7 +84,7 @@ def train_wavelet_transformer(training_data):
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
-        random_seed=45,
+        random_seed=46,
         use_start_token=True
     )
 

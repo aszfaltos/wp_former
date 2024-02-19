@@ -119,7 +119,7 @@ class Trainer:
                 mse_loss += float(loss.item()) / len(data_loader)
                 rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
                 mae_loss += float(mae(out[:, 1:], tgt_data[:, 1:]).item()) / len(data_loader)
-                mape_loss += mae_loss / float(sum(tgt_data.reshape(-1)))
+                mape_loss += mae_loss / float(sum(tgt_data[:, 1:].reshape(-1)))
 
         self.model.train()
 

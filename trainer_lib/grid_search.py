@@ -37,12 +37,7 @@ def transformer_grid_search(grid: Grid,
         valid_size = int(round(len(data) * opts.valid_split))
         test_size = int(round(len(data) * opts.test_split))
 
-        indices = np.random.permutation(data.shape[0])
-        train_idx, valid_idx, test_idx = (indices[:-valid_size-test_size],
-                                          indices[-valid_size-test_size:-test_size],
-                                          indices[-test_size:])
-
-        train, valid, test = data[train_idx,], data[valid_idx,], data[test_idx,]
+        train, valid, test = data[:-valid_size-test_size], data[-valid_size-test_size:-test_size], data[-test_size:]
 
         train_dataset = TimeSeriesWindowedTensorDataset(train,
                                                         TimeSeriesWindowedDatasetConfig(
