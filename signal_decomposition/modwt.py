@@ -139,7 +139,8 @@ def modwtmra(w, filters):
         h_j_up = upArrow_op(h, j + 1)
         h_j = np.convolve(g_j_part, h_j_up)
         h_j_t = h_j / (2**((j + 1) / 2.))
-        if j == 0: h_j_t = h / np.sqrt(2)
+        if j == 0:
+            h_j_t = h / np.sqrt(2)
         h_j_t_o = period_list(h_j_t, N)
         D.append(circular_convolve_mra(h_j_t_o, w[j]))
     # S

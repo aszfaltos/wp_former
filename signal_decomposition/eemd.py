@@ -3,11 +3,11 @@ from PyEMD import EEMD as PY_EEMD
 
 
 class EEMDWrapper:
-    def __init__(self, data: np.ndarray, imfs=-1, random_seed=42, spline_kind='akima'):
+    def __init__(self, data: np.ndarray, imfs=-1, random_seed=42, spline_kind='akima', trials=100):
         self._original = data
-        self._eemd = PY_EEMD(spline_kind=spline_kind)
+        self._eemd = PY_EEMD(spline_kind=spline_kind, parallel=True, trials=trials)
         self._eemd.noise_seed(random_seed)
-        self._eemd.eemd(data, max_imf=imfs)
+        self._eemd.eemd(data, max_imf=imfs, progress=True)
         self._imfs, self._residue = self._eemd.get_imfs_and_residue()
 
     def get_imfs(self):

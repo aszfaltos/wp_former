@@ -11,4 +11,4 @@ def standardize(data: ndarray):
 
 
 def min_max_norm(data: ndarray):
-    return (data - data.min()) / (data.max() - data.min())
+    return ((data - data.min()) / (data.max() - data.min()) - .5) * 2
