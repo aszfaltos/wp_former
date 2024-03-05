@@ -27,7 +27,7 @@ class MultiHeadAttention(nn.Module):
             attn_scores = attn_scores.masked_fill(mask == 0, -1e9)
         attn_probs = torch.softmax(attn_scores, dim=-1)
         output = torch.matmul(attn_probs, v)
-        return output
+        return output, attn_probs
 
     def split_heads(self, x):
         # batch_size, seq_length, d_model
@@ -47,9 +47,9 @@ class MultiHeadAttention(nn.Module):
         k = self.split_heads(self.W_k(k))
         v = self.split_heads(self.W_v(v))
 
-        attn_output = self.scaled_dot_product_attention(q, k, v, mask)
+        attn_output, attn_probs = self.scaled_dot_product_attention(q, k, v, mask)
         output = self.W_o(self.combine_heads(attn_output))
-        return output
+        return output, attn_probs
 
 
 class PositionWiseFF(nn.Module):
@@ -91,11 +91,11 @@ class EncoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, mask=None):
-        attn_output = self.attn_heads(x, x, x, mask)
+        attn_output, attn_probs = self.attn_heads(x, x, x, mask)
         x = self.norm1(x + self.dropout(attn_output))
         ff_output = self.ff(x)
         x = self.norm2(x + self.dropout(ff_output))
-        return x
+        return x, attn_probs
 
 
 class DecoderLayer(nn.Module):
@@ -110,13 +110,13 @@ class DecoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, enc_output, src_mask=None, tgt_mask=None):
-        attn_output = self.self_attn(x, x, x, tgt_mask)
+        attn_output, self_attn_probs = self.self_attn(x, x, x, tgt_mask)
         x = self.norm1(x + self.dropout(attn_output))
-        attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
+        attn_output, cross_attn_probs = self.cross_attn(x, enc_output, enc_output, src_mask)
         x = self.norm2(x + self.dropout(attn_output))
         ff_output = self.ff(x)
         x = self.norm3(x + self.dropout(ff_output))
-        return x
+        return x, self_attn_probs, cross_attn_probs
 
 
 @dataclass
@@ -169,18 +169,30 @@ class Transformer(nn.Module):
         tgt_mask = tgt_mask & nopeak_mask
         return src_mask, tgt_mask
 
-    def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
+    def forward(self, src: Tensor, tgt: Tensor, return_attn=False):
         src_mask, tgt_mask = Transformer.generate_mask(src.sum(-1), tgt.sum(-1))
         src_pos_encoded = self.positional_encoding(self.W_encoder(self.dropout(src)))
         tgt_pos_encoded = self.positional_encoding(self.W_decoder(self.dropout(tgt)))
         
         enc_output = src_pos_encoded
+        enc_attn_probs = []
+        dec_self_attn_probs = []
+        dec_cross_attn_probs = []
         for enc_layer in self.enc_layers:
-            enc_output = enc_layer(enc_output, src_mask)
+            enc_output, attn_probs = enc_layer(enc_output, src_mask)
+            if return_attn:
+                enc_attn_probs.append(attn_probs)
 
         dec_output = tgt_pos_encoded
         for dec_layer in self.dec_layers:
-            dec_output = dec_layer(dec_output, enc_output, src_mask, tgt_mask)
+            dec_output, self_attn_probs, cross_attn_probs = dec_layer(dec_output, enc_output, src_mask, tgt_mask)
+            if return_attn:
+                dec_self_attn_probs.append(self_attn_probs)
+                dec_cross_attn_probs.append(cross_attn_probs)
 
         output = self.fc(self.dropout(dec_output))
+
+        if return_attn:
+            return output, enc_attn_probs, dec_self_attn_probs, dec_cross_attn_probs
+
         return output
