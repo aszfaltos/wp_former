@@ -16,7 +16,7 @@ def load_model(test: str, name: str, epoch: int, model_type: type, path: str = '
         d_model=params['d_model'],
         num_heads=params['num_heads'],
         num_layers=params['num_layers'],
-        d_ff=params['d_ff'],
+        d_ff=params['d_ff']*params['d_model'],
         max_seq_length=max(params['src_seq_length'], params['tgt_seq_length']),
         dropout=params['dropout']
     )

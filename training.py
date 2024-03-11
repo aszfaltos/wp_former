@@ -13,14 +13,12 @@ def load_data(sample_size, start_idx):
     return utils.sample(df, sample_size, start_idx=start_idx)
 
 
-def set_default_options(src_size, tgt_size):
+def set_default_options():
     params = {
-        'src_size': [src_size],
-        'tgt_size': [tgt_size],
         'd_model': [128],
         'num_heads': [2],
         'num_layers': [1],
-        'd_ff': [256],
+        'd_ff': [2],
         'src_seq_length': [24],
         'tgt_seq_length': [1],
         'src_window': [8],
@@ -32,13 +30,13 @@ def set_default_options(src_size, tgt_size):
     training_opts = TrainerOptions(
         batch_size=8,
         epochs=30,
-        learning_rate=1e-4,
-        learning_rate_decay=.99,
+        learning_rate=1e-3,
+        learning_rate_decay=.999,
         weight_decay=1e-5,
         warmup_steps=10,
         warmup_start_factor=1e-6,
         gradient_accumulation_steps=8,
-        early_stopping_patience=10,
+        early_stopping_patience=30,
         early_stopping_min_delta=0.01,
         save_every_n_epochs=5,
         save_path=''
@@ -48,21 +46,22 @@ def set_default_options(src_size, tgt_size):
 
 
 def train_regular_transformer(training_data):
-    grid, training_opts = set_default_options(1, 1)
+    grid, training_opts = set_default_options()
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/regular/',
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
-        random_seed=46,
-        use_start_token=True
+        random_seed=50,
+        use_start_token=True,
+        preprocess_y=False
     )
 
     transformer_grid_search(grid, training_data, training_opts, grid_search_opts)
 
 
 def train_eemd_transformer(training_data):
-    grid, training_opts = set_default_options(training_data.shape[-1], training_data.shape[-1])
+    grid, training_opts = set_default_options()
 
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/eemd/',
@@ -70,49 +69,44 @@ def train_eemd_transformer(training_data):
         test_split=0.2,
         window_step_size=4,
         random_seed=46,
-        use_start_token=True
+        use_start_token=True,
+        preprocess_y=False
     )
 
-    transformer_grid_search(grid, training_data, training_opts, grid_search_opts)
+    transformer_grid_search(grid, training_data, training_opts, grid_search_opts,
+                            preprocessor=eemd.EEMDPreprocessor(imfs=3, trials=20))
 
 
 def train_wavelet_transformer(training_data):
-    grid, training_opts = set_default_options(training_data.shape[-1], training_data.shape[-1])
+    grid, training_opts = set_default_options()
 
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/wavelet/',
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
-        random_seed=46,
-        use_start_token=True
+        random_seed=50,
+        use_start_token=True,
+        preprocess_y=False
     )
 
-    transformer_grid_search(grid, training_data, training_opts, grid_search_opts)
+    transformer_grid_search(grid, training_data, training_opts, grid_search_opts,
+                            preprocessor=wavelet.WaveletPreprocessor('db2'))
 
 
 def main():
-    sample = load_data(10000, 0)
+    sample = load_data(5000, 0)
+    sample = sample['Power'].to_numpy()
     print('data loaded')
-    training_data_regular = np.array(sample['Power'].to_numpy()[..., np.newaxis], dtype=np.float32)
-    print('regular train data prepared')
-
-    decomposed = eemd.EEMDWrapper(sample['Power'].to_numpy(), 3)
-    training_data_eemd = np.array(np.concatenate([decomposed.get_imfs().transpose(),
-                                                  decomposed.get_residue()[..., np.newaxis]], dtype=np.float32, axis=1))
-    print('eemd train data prepared')
-
-    wlt = wavelet.WaveletWrapper(sample['Power'].to_numpy(), 'db2', decomposition_lvl=3)
-    training_data_wlt = np.array(wlt.get_mra(), dtype=np.float32).transpose()
-    print("wavelet train data prepared")
 
     print('regular transformer:')
-    train_regular_transformer(training_data_regular)
+    train_regular_transformer(sample)
     print('eemd transformer:')
-    train_eemd_transformer(training_data_eemd)
+    #train_eemd_transformer(sample)
     print('wlt transformer:')
-    train_wavelet_transformer(training_data_wlt)
+    train_wavelet_transformer(sample)
 
 
 if __name__ == '__main__':
     main()
+    # TODO: test, lr, model sizes, wd, dropout, lr decay

@@ -1,1 +1,1 @@
-__all__ = ['eemd', 'wavelet']
+__all__ = ['eemd', 'wavelet', 'preprocessor']

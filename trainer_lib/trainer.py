@@ -98,7 +98,42 @@ class Trainer:
         with open(os.path.join(self.opts.save_path, f'{last_epoch + 1}.json'), "w") as fp:
             json.dump(self.metrics, fp)
 
-    def _calc_metrics(self, data_loader):
+    def _evaluate(self, data_loader, early_stopper: EarlyStopper):
+        self.model.eval()
+
+        mse = nn.MSELoss()
+        mae = nn.L1Loss()
+        mse_loss: float = 0
+        rmse_loss: float = 0
+        mae_loss: float = 0
+        mape_loss: float = 0
+
+        with torch.no_grad():
+            for src_data, tgt_data in data_loader:
+                out = self.model(src_data, tgt_data[:, :-1])
+
+                loss = mse(out, tgt_data[:, 1:])
+                mse_loss += float(loss.item()) / len(data_loader)
+                rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
+                mae_loss += float(mae(out, tgt_data[:, 1:]).item()) / len(data_loader)
+                mape_loss += mae_loss / float(sum(abs(tgt_data[:, 1:].reshape(-1))))
+
+        self.model.train()
+
+        print(
+            f"; Eval - MSE: {mse_loss}," +
+            f" RMSE: {rmse_loss}," +
+            f" MAE: {mae_loss}," +
+            f" MAPE: {round(mape_loss * 100, 4)}")
+
+        self.metrics['eval']['MSE'].append(mse_loss)
+        self.metrics['eval']['RMSE'].append(rmse_loss)
+        self.metrics['eval']['MAE'].append(mae_loss)
+        self.metrics['eval']['MAPE'].append(mape_loss)
+
+        return early_stopper.early_stop(mse_loss)
+
+    def _test_model(self, data_loader):
         self.model.eval()
 
         mse = nn.MSELoss()
@@ -119,40 +154,19 @@ class Trainer:
                 mse_loss += float(loss.item()) / len(data_loader)
                 rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
                 mae_loss += float(mae(out[:, 1:], tgt_data[:, 1:]).item()) / len(data_loader)
-                mape_loss += mae_loss / float(sum(tgt_data[:, 1:].reshape(-1)))
+                mape_loss += mae_loss / float(abs(sum(tgt_data[:, 1:].reshape(-1))))
 
         self.model.train()
 
-        return mse_loss, rmse_loss, mae_loss, mape_loss
-
-    def _evaluate(self, data_loader, early_stopper: EarlyStopper):
-        mse, rmse, mae, mape = self._calc_metrics(data_loader)
-
-        print(
-            f"; Eval - MSE: {mse}," +
-            f" RMSE: {rmse}," +
-            f" MAE: {mae}," +
-            f" MAPE: {round(mape * 100, 2)}")
-
-        self.metrics['eval']['MSE'].append(mse)
-        self.metrics['eval']['RMSE'].append(rmse)
-        self.metrics['eval']['MAE'].append(mae)
-        self.metrics['eval']['MAPE'].append(mape)
-
-        return early_stopper.early_stop(mse)
-
-    def _test_model(self, data_loader):
-        mse, rmse, mae, mape = self._calc_metrics(data_loader)
-
         print("-----------------------")
         print(
-            f"Test - MSE: {mse}," +
-            f" RMSE: {rmse}," +
-            f" MAE: {mae}," +
-            f" MAPE: {round(mape * 100, 2)}")
+            f"Test - MSE: {mse_loss}," +
+            f" RMSE: {rmse_loss}," +
+            f" MAE: {mae_loss}," +
+            f" MAPE: {round(mape_loss * 100, 4)}")
         print("-----------------------\n")
 
-        self.metrics['test']['MSE'] = mse
-        self.metrics['test']['RMSE'] = rmse
-        self.metrics['test']['MAE'] = mae
-        self.metrics['test']['MAPE'] = mape
+        self.metrics['test']['MSE'] = mse_loss
+        self.metrics['test']['RMSE'] = rmse_loss
+        self.metrics['test']['MAE'] = mae_loss
+        self.metrics['test']['MAPE'] = mape_loss
