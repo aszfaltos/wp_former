@@ -93,8 +93,8 @@ class vpfun(Function):
     ----------
     x: torch Tensor of size (N,C,L) where
         N is the batch_size,
-        C is the number of channels, and
-        L is the number of signal samples
+        L is the number of signal samples, and
+        C is the number of channels
     params: torch Tensor of floats
           Contains the nonlinear parameters of the function system stored in Phi.
           For instance, if Phi(params) is provided by 'ada_hermite',
@@ -132,8 +132,9 @@ class vpfun(Function):
         phi, dphi, ind = ada(params)
         phip = torch.linalg.pinv(phi)
         coeffs = phip @ torch.transpose(x, 1, 2)
-        print(coeffs.shape)
+        # print('coeffs', coeffs.shape)
         y_est = torch.transpose(phi @ coeffs, 1, 2)
+        # print('y_est', y_est.shape)
         nparams = torch.tensor(max(params.shape))
         ctx.save_for_backward(x, phi, phip, dphi, ind, coeffs, y_est, nparams)
 

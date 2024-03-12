@@ -15,6 +15,7 @@ def load_data(sample_size, start_idx):
 
 def set_default_options():
     params = {
+        'kind': ['transformer'],
         'd_model': [128],
         'num_heads': [2],
         'num_layers': [1],
@@ -94,17 +95,52 @@ def train_wavelet_transformer(training_data):
                             preprocessor=wavelet.WaveletPreprocessor('db2'))
 
 
+def train_wavelet_vp_transformer(training_data):
+    _, training_opts = set_default_options()
+
+    params = {
+        'kind': ['vp_transformer'],
+        'vp_bases': [8],
+        'vp_penalty': [0.0],
+        'd_model': [128],
+        'num_heads': [2],
+        'num_layers': [1],
+        'd_ff': [2],
+        'src_seq_length': [24],
+        'tgt_seq_length': [1],
+        'src_window': [8],
+        'tgt_window': [1],
+        'dropout': [0.1],
+    }
+    grid = Grid(params)
+
+    grid_search_opts = GridSearchOptions(
+        root_save_path='./trained/vp_wavelet/',
+        valid_split=0.2,
+        test_split=0.2,
+        window_step_size=4,
+        random_seed=50,
+        use_start_token=True,
+        preprocess_y=False
+    )
+
+    transformer_grid_search(grid, training_data, training_opts, grid_search_opts,
+                            preprocessor=wavelet.WaveletPreprocessor('db2'))
+
+
 def main():
     sample = load_data(5000, 0)
     sample = sample['Power'].to_numpy()
     print('data loaded')
 
     print('regular transformer:')
-    train_regular_transformer(sample)
+    # train_regular_transformer(sample)
     print('eemd transformer:')
     #train_eemd_transformer(sample)
     print('wlt transformer:')
-    train_wavelet_transformer(sample)
+    # train_wavelet_transformer(sample)
+    print('wlt vp transformer:')
+    train_wavelet_vp_transformer(sample)
 
 
 if __name__ == '__main__':

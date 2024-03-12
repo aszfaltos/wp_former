@@ -3,14 +3,13 @@ from dataclasses import dataclass
 import json
 
 from numpy import ndarray
-from torch import Tensor
-from torch.utils.data import random_split
+from torch import nn
 
 import utils
 from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
 from .permutation_grid import Grid
 from .trainer import Trainer, TrainerOptions
-from models import Transformer, TransformerParams
+from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams
 import numpy as np
 from signal_decomposition.preprocessor import Preprocessor
 
@@ -60,17 +59,7 @@ def transformer_grid_search(grid: Grid,
         params['src_size'] = dataset.vec_size_x
         params['tgt_size'] = dataset.vec_size_y
 
-        transformer_params = TransformerParams(
-            src_size=dataset.vec_size_x * dataset.ws_x,
-            tgt_size=dataset.vec_size_y * dataset.ws_y,
-            d_model=params['d_model'],
-            num_heads=params['num_heads'],
-            num_layers=params['num_layers'],
-            d_ff=params['d_ff']*params['d_model'],
-            max_seq_length=max(dataset.sl_x, dataset.sl_y),
-            dropout=params['dropout']
-        )
-        model = Transformer(transformer_params)
+        model = create_model(params, dataset)
 
         trainer_options.save_path = os.path.join(path, names[idx])
         os.makedirs(trainer_options.save_path, exist_ok=True)
@@ -79,3 +68,36 @@ def transformer_grid_search(grid: Grid,
 
         trainer = Trainer(model, trainer_options)
         trainer.train(train_dataset, valid_dataset, test_dataset)
+
+
+def create_model(params: dict, dataset: TimeSeriesWindowedTensorDataset) -> nn.Module:
+    if params['kind'] == 'vp_transformer':
+        transformer_params = VPTransformerParams(
+            src_size=dataset.vec_size_x * dataset.ws_x,
+            tgt_size=dataset.vec_size_y * dataset.ws_y,
+            d_model=params['d_model'],
+            num_heads=params['num_heads'],
+            num_layers=params['num_layers'],
+            d_ff=params['d_ff'] * params['d_model'],
+            max_seq_length=max(dataset.sl_x, dataset.sl_y),
+            dropout=params['dropout'],
+            vp_bases=params['vp_bases'],
+            vp_penalty=params['vp_penalty']
+        )
+        model = VPTransformer(transformer_params)
+        return model
+    elif params['kind'] == 'transformer':
+        transformer_params = TransformerParams(
+            src_size=dataset.vec_size_x * dataset.ws_x,
+            tgt_size=dataset.vec_size_y * dataset.ws_y,
+            d_model=params['d_model'],
+            num_heads=params['num_heads'],
+            num_layers=params['num_layers'],
+            d_ff=params['d_ff'] * params['d_model'],
+            max_seq_length=max(dataset.sl_x, dataset.sl_y),
+            dropout=params['dropout']
+        )
+        model = Transformer(transformer_params)
+        return model
+    elif params['kind'] == 'lstm':
+        pass

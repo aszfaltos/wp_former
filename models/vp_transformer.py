@@ -1,4 +1,4 @@
-from vp_layers import vp_layer, ada_hermite
+from .vp_layers import vp_layer, ada_hermite
 import torch
 from torch import nn
 from .transformer import Transformer, TransformerParams
@@ -40,7 +40,9 @@ class VPTransformer(nn.Module):
         self.transformer = Transformer(t_params)
 
     def forward(self, src, tgt, return_vp_and_attn=False):
-        vp_out = self.vp_layer.forward(src.transpose(1, 2)).traspose(1, 2)
+        # print('src', src.shape)
+        vp_out = self.vp_layer.forward(src)
+        # print('vp_out', vp_out.shape)
         if not return_vp_and_attn:
             return self.transformer.forward(src, tgt)
 
