@@ -101,14 +101,14 @@ def train_wavelet_vp_transformer(training_data):
     params = {
         'kind': ['vp_transformer'],
         'vp_bases': [8],
-        'vp_penalty': [0.0],
+        'vp_penalty': [0.2],
         'd_model': [128],
         'num_heads': [2],
         'num_layers': [1],
         'd_ff': [2],
-        'src_seq_length': [24],
+        'src_seq_length': [24*8],
         'tgt_seq_length': [1],
-        'src_window': [8],
+        'src_window': [1],
         'tgt_window': [1],
         'dropout': [0.1],
     }

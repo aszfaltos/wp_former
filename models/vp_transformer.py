@@ -44,9 +44,9 @@ class VPTransformer(nn.Module):
         vp_out = self.vp_layer.forward(src)
         # print('vp_out', vp_out.shape)
         if not return_vp_and_attn:
-            return self.transformer.forward(src, tgt)
+            return self.transformer.forward(vp_out, tgt)
 
-        t_out, enc_attn_probs, dec_self_attn_probs, dec_cross_attn_probs = self.transformer.forward(src, tgt,
+        t_out, enc_attn_probs, dec_self_attn_probs, dec_cross_attn_probs = self.transformer.forward(vp_out, tgt,
                                                                                                     return_attn=True)
 
         return t_out, enc_attn_probs, dec_self_attn_probs, dec_cross_attn_probs, vp_out
