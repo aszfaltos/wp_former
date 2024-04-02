@@ -9,7 +9,7 @@ import utils
 from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
 from .permutation_grid import Grid
 from .trainer import Trainer, TrainerOptions
-from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams
+from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams
 import numpy as np
 from signal_decomposition.preprocessor import Preprocessor
 
@@ -67,7 +67,7 @@ def transformer_grid_search(grid: Grid,
             json.dump(params, fp)
 
         trainer = Trainer(model, trainer_options)
-        trainer.train(train_dataset, valid_dataset, test_dataset)
+        trainer.train(train_dataset, valid_dataset, test_dataset, lstm=(params['kind'] == 'lstm'))
 
 
 def create_model(params: dict, dataset: TimeSeriesWindowedTensorDataset) -> nn.Module:
@@ -100,4 +100,12 @@ def create_model(params: dict, dataset: TimeSeriesWindowedTensorDataset) -> nn.M
         model = Transformer(transformer_params)
         return model
     elif params['kind'] == 'lstm':
-        pass
+        lstm_params = LSTMParams(features=dataset.vec_size_x,
+                                 hidden_size=params['hidden_size'],
+                                 num_layers=params['num_layers'],
+                                 dropout=params['dropout'],
+                                 in_noise=params['in_noise'],
+                                 hid_noise=params['hid_noise'],
+                                 bidirectional=params['bidirectional'])
+        model = LSTMModel(lstm_params)
+        return model

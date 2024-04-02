@@ -1,5 +1,17 @@
 from torch import nn
 import torch
+from dataclasses import dataclass
+
+
+@dataclass
+class LSTMParams:
+    features: int
+    hidden_size: int
+    num_layers: int
+    dropout: float
+    in_noise: float
+    hid_noise: float
+    bidirectional: bool
 
 
 class GaussianNoise(nn.Module):
@@ -19,31 +31,25 @@ class GaussianNoise(nn.Module):
 
 class LSTMModel(nn.Module):
     def __init__(self,
-                 features=11,
-                 hidden_size=15,
-                 num_layers=2,
-                 dropout=0.0,
-                 in_noise=0.0,
-                 hid_noise=0.0,
-                 bidirectional=True,
+                 params: LSTMParams = LSTMParams(1, 15, 2, 0, 0, 0, True),
                  **kwargs):
         super(LSTMModel, self).__init__()
-        self.hidden_size = hidden_size
-        self.h_n_dim = 2 if bidirectional else 1
-        self.num_layers = num_layers
-        self.in_noise = GaussianNoise(in_noise)
-        rec_drop = dropout if num_layers > 1 else 0.0
-        self.lstm = nn.LSTM(input_size=features,
+        self.hidden_size = params.hidden_size
+        self.h_n_dim = 2 if params.bidirectional else 1
+        self.num_layers = params.num_layers
+        self.in_noise = GaussianNoise(params.in_noise)
+        rec_drop = params.dropout if params.num_layers > 1 else 0.0
+        self.lstm = nn.LSTM(input_size=params.features,
                             hidden_size=self.hidden_size,
-                            num_layers=num_layers,
+                            num_layers=params.num_layers,
                             batch_first=True,
-                            bidirectional=bidirectional,
+                            bidirectional=params.bidirectional,
                             dropout=rec_drop)
         # https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
         self.fc = nn.Sequential(
             nn.Flatten(),
-            GaussianNoise(hid_noise),
-            nn.Dropout(dropout),
+            GaussianNoise(params.hid_noise),
+            nn.Dropout(params.dropout),
             nn.Linear(self.hidden_size * self.h_n_dim * self.num_layers, 3)
         )
 

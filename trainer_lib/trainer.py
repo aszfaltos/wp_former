@@ -41,7 +41,7 @@ class Trainer:
                         'test': {'MSE': .0, 'RMSE': .0, 'MAE': .0, 'MAPE': .0}}
         os.makedirs(self.opts.save_path, exist_ok=True)
 
-    def train(self, train_data, valid_data, test_data):
+    def train(self, train_data, valid_data, test_data, lstm=False):
         early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
         optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9,
                                weight_decay=self.opts.weight_decay)
@@ -64,7 +64,15 @@ class Trainer:
             train_loss: float = 0
 
             for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
-                output = self.model(src_data, tgt_data[:, :-1])
+                if lstm:
+                    in_data = src_data
+                    for _ in range(tgt_data.shape[1] - 1):
+                        out = self.model(in_data)
+                        in_data = torch.concat((in_data, out.unsqueeze(-1)), dim=1)
+                    output = in_data[:, -(tgt_data.shape[1]-1):]
+
+                else:
+                    output = self.model(src_data, tgt_data[:, :-1])
                 loss = mse(output, tgt_data[:, 1:])
                 train_loss += float(loss.item()) / len(train_loader)
                 loss = loss / self.opts.gradient_accumulation_steps
@@ -82,7 +90,7 @@ class Trainer:
                 end='')
 
             self.metrics['train']['MSE'].append(train_loss)
-            stop = self._evaluate(valid_loader, early_stopper)
+            stop = self._evaluate(valid_loader, early_stopper, lstm)
 
             if (epoch + 1) % self.opts.save_every_n_epochs == 0:
                 checkpoint(self.model, os.path.join(self.opts.save_path, f'{epoch + 1}.pth'))
@@ -93,12 +101,12 @@ class Trainer:
                 print(f'Stopped after {epoch + 1} epochs.')
                 break
 
-        self._test_model(test_loader)
+        self._test_model(test_loader, lstm)
         checkpoint(self.model, os.path.join(self.opts.save_path, f'{last_epoch + 1}.pth'))
         with open(os.path.join(self.opts.save_path, f'{last_epoch + 1}.json'), "w") as fp:
             json.dump(self.metrics, fp)
 
-    def _evaluate(self, data_loader, early_stopper: EarlyStopper):
+    def _evaluate(self, data_loader, early_stopper: EarlyStopper, lstm: bool):
         self.model.eval()
 
         mse = nn.MSELoss()
@@ -110,7 +118,14 @@ class Trainer:
 
         with torch.no_grad():
             for src_data, tgt_data in data_loader:
-                out = self.model(src_data, tgt_data[:, :-1])
+                if lstm:
+                    in_data = src_data
+                    for _ in range(tgt_data.shape[1] - 1):
+                        out = self.model(in_data)
+                        in_data = torch.concat((in_data, out.unsqueeze(-1)), dim=1)
+                    out = in_data[:, -(tgt_data.shape[1]-1):]
+                else:
+                    out = self.model(src_data, tgt_data[:, :-1])
 
                 loss = mse(out, tgt_data[:, 1:])
                 mse_loss += float(loss.item()) / len(data_loader)
@@ -133,7 +148,7 @@ class Trainer:
 
         return early_stopper.early_stop(mse_loss)
 
-    def _test_model(self, data_loader):
+    def _test_model(self, data_loader, lstm):
         self.model.eval()
 
         mse = nn.MSELoss()
@@ -145,12 +160,20 @@ class Trainer:
 
         with torch.no_grad():
             for src_data, tgt_data in data_loader:
-                ones = tgt_data[:, 0, :].reshape(tgt_data.shape[0], 1, tgt_data.shape[-1])
-                out = ones
-                for _ in range(tgt_data.shape[1] - 1):
-                    out = torch.concat((ones, self.model(src_data, out)), dim=1)
+                if lstm:
+                    in_data = src_data
+                    for _ in range(tgt_data.shape[1] - 1):
+                        out = self.model(in_data)
+                        in_data = torch.concat((in_data, out), dim=1)
+                    out = in_data[:, -(tgt_data.shape[1]-1):]
+                else:
+                    ones = tgt_data[:, 0, :].reshape(tgt_data.shape[0], 1, tgt_data.shape[-1])
+                    out = ones
+                    for _ in range(tgt_data.shape[1] - 1):
+                        out = torch.concat((ones, self.model(src_data, out)), dim=1)
+                    out = out[:, 1:]
 
-                loss = mse(out[:, 1:], tgt_data[:, 1:])
+                loss = mse(out, tgt_data[:, 1:])
                 mse_loss += float(loss.item()) / len(data_loader)
                 rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
                 mae_loss += float(mae(out[:, 1:], tgt_data[:, 1:]).item()) / len(data_loader)

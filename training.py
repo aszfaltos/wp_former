@@ -128,6 +128,38 @@ def train_wavelet_vp_transformer(training_data):
                             preprocessor=wavelet.WaveletPreprocessor('db2'))
 
 
+def train_lstm(training_data):
+    _, training_opts = set_default_options()
+
+    params = {
+        'kind': ['lstm'],
+        'features': [1],
+        'hidden_size': [15],
+        'num_layers': [2],
+        'dropout': [.1],
+        'in_noise': [.0],
+        'hid_noise': [.0],
+        'bidirectional': [True],
+        'src_seq_length': [24 * 8],
+        'tgt_seq_length': [1],
+        'src_window': [1],
+        'tgt_window': [1],
+    }
+    grid = Grid(params)
+
+    grid_search_opts = GridSearchOptions(
+        root_save_path='./trained/lstm/',
+        valid_split=0.2,
+        test_split=0.2,
+        window_step_size=4,
+        random_seed=50,
+        use_start_token=True,
+        preprocess_y=False
+    )
+
+    transformer_grid_search(grid, training_data, training_opts, grid_search_opts)
+
+
 def main():
     sample = load_data(5000, 0)
     sample = sample['Power'].to_numpy()
@@ -140,7 +172,10 @@ def main():
     print('wlt transformer:')
     # train_wavelet_transformer(sample)
     print('wlt vp transformer:')
-    train_wavelet_vp_transformer(sample)
+    #train_wavelet_vp_transformer(sample)
+
+    print('lstm')
+    train_lstm(sample)
 
 
 if __name__ == '__main__':
