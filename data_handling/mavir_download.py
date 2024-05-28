@@ -1,9 +1,8 @@
 import atexit
 import os
-import sys
 import time
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime
 from shutil import rmtree
 from enum import Enum
 import logging
@@ -12,6 +11,11 @@ import pandas as pd
 
 from utils import exit_handling
 
+# TODO: make this env var for docker
+TEMP_DATA_PATH = 'temp_data'
+
+# TODO: Create custom logger for the whole codebase should send you emails about errors when run in docker
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -19,11 +23,11 @@ def exiting():
     if exit_handling.exit_hooks.exit_code != 0 or exit_handling.exit_hooks.exception is not None:
         logger.warning("Download may be corrupted, because program was interrupted or an exception occurred!")
 
-    if not os.path.exists('temp_data'):
+    if not os.path.exists(TEMP_DATA_PATH):
         return
 
     logger.info('Cleaning up temporary files...')
-    rmtree('temp_data')
+    rmtree(TEMP_DATA_PATH)
 
 
 class PeriodType(Enum):
@@ -35,25 +39,27 @@ def format_mavir(dataframe: pd.DataFrame):
     dataframe.columns = dataframe.columns.str.strip()
     dataframe.index = pd.to_datetime(dataframe['Időpont'], utc=True)
     dataframe.index.name = 'Time'
-    dataframe.drop(['Időpont'], axis=1, inplace=True)
+
+    dataframe.drop(['Időpont',
+                    'Szélerőművek tény - nettó kereskedelmi elszámolási',
+                    'Szélerőművek tény - nettó üzemirányítási',
+                    'Szélerőművek tény - bruttó üzemirányítási 1p'],
+                   inplace=True, axis=1)
+
     dataframe.dropna(axis=0, inplace=True)
     dataframe.rename(columns={'Szélerőművek tény - bruttó üzemirányítási': 'Wind Power [MW] (actual)',
                               'Szélerőművek becsült termelése (aktuális)': 'Wind Power [MW] (estimated)',
                               'Szélerőművek becsült termelése (dayahead)': 'Wind Power [MW] (dayahead)',
                               'Szélerőművek becsült termelése (intraday)': 'Wind Power [MW] (intraday)'},
                      inplace=True)
-
-    dataframe.drop(['Szélerőművek tény - nettó kereskedelmi elszámolási',
-                    'Szélerőművek tény - nettó üzemirányítási',
-                    'Szélerőművek tény - bruttó üzemirányítási 1p'],
-                   inplace=True, axis=1)
     return dataframe
 
 
-def download_mavir_data(path: str, from_time: str, to_time: str, period=10):
+def download_mavir_data(path: str, name: str, from_time: str, to_time: str, period=10):
     """
     Downloads data from MAVIR.
     :param path: path to save the data
+    :param name: name of the file
     :param from_time: in format 'YYYY-MM-DD hh:mm:ss'
     :param to_time: in format 'YYYY-MM-DD hh:mm:ss'
     :param period: period of the data in minutes
@@ -67,13 +73,15 @@ def download_mavir_data(path: str, from_time: str, to_time: str, period=10):
     period_in_ms = period * 60 * 1000
     lines_in_interval = (to_in_ms - from_in_ms) // period_in_ms + 1
     n = lines_in_interval // 60_000 + 1
+    if lines_in_interval > 30_000:
+        n *= 4  # splitting every fragment into 4 parts for memory reasons
     fraction_in_ms = (to_in_ms - from_in_ms) // n
 
     dfs = []
     # Sleep is needed to not spam the api.
     sleep_time = 5
     for i in range(0, n):
-        logger.info(f"Downloading {i}. fragment")
+        logger.info(f"Downloading {i+1}. fragment")
         start = datetime.now()
 
         df = download_from_to(f'mavir_{i}',
@@ -85,15 +93,15 @@ def download_mavir_data(path: str, from_time: str, to_time: str, period=10):
             dfs.append(df)
 
         runtime = (datetime.now() - start).total_seconds()
-        logger.info(f"Downloaded {i}. fragment in {runtime} seconds")
+        logger.info(f"Downloaded {i+1}. fragment in {runtime} seconds")
 
         time.sleep(sleep_time)
 
-    pd.concat(dfs).to_csv(path, sep=',', decimal='.')
-
-    if not os.path.exists('mavir_data'):
+    if not os.path.exists(path):
         logger.info('Creating mavir_data directory')
-        os.makedirs('mavir_data')
+        os.makedirs(path)
+
+    pd.concat(dfs).to_csv(os.path.join(path, f'{name}.csv'), sep=',', decimal='.')
 
 
 def prep_datetime(dt: str):
@@ -112,12 +120,8 @@ def download_from_to(name: str, from_time: int, to_time: int, period=10,
     Time should be given as ms.
     The measurements are taken every 10 minutes.
     """
-    if not os.path.exists('temp_data'):
-        os.makedirs('temp_data')
-    if not os.path.exists('mavir_data'):
-        os.makedirs('mavir_data')
-
-    print(from_time, to_time, period, period_type)
+    if not os.path.exists(TEMP_DATA_PATH):
+        os.makedirs(TEMP_DATA_PATH)
 
     url = (f"https://www.mavir.hu/rtdwweb/webuser/chart/11840/export"
            f"?exportType=xlsx"
@@ -126,15 +130,13 @@ def download_from_to(name: str, from_time: int, to_time: int, period=10,
            f"&periodType={period_type.value}"
            f"&period={period}")
 
-    print(url)
-
-    temp_path = f"temp_data/{name}.xlsx"
+    temp_path = os.path.join(TEMP_DATA_PATH, f'{name}.xlsx')
     response = req_get(url, timeout=240)
 
     if response.status_code == 200:
         with open(temp_path, 'wb') as f:
             f.write(response.content)
-            print(f"Downloaded {temp_path}")
+            logger.debug(f"Downloaded {temp_path}")
     else:
         logger.error(f"Error {response.status_code} for request.\nError message: {response.content.decode()}")
         exit(1)
@@ -160,19 +162,23 @@ def load_mavir_data():
 
 def main():
     # Test downloads
-    download_mavir_data('../data/mavir_data/mavir_test_10.csv',
-                        '2024-01-01 00:00:00',
+    download_mavir_data('../data/mavir_data',
+                        'mavir_test_10',
+                        '2021-01-01 00:00:00',
                         '2024-01-02 00:00:00',
                         period=10)
-    download_mavir_data('../data/mavir_data/mavir_test_30.csv',
+    download_mavir_data('../data/mavir_data',
+                        'mavir_test_30',
                         '2024-01-01 00:00:00',
                         '2024-01-02 00:00:00',
                         period=30)
-    download_mavir_data('../data/mavir_data/mavir_test_60.csv',
+    download_mavir_data('../data/mavir_data',
+                        'mavir_test_60',
                         '2024-01-01 00:00:00',
                         '2024-01-02 00:00:00',
                         period=60)
-    download_mavir_data('../data/mavir_data/mavir_test_120.csv',
+    download_mavir_data('../data/mavir_data',
+                        'mavir_test_120',
                         '2024-01-01 00:00:00',
                         '2024-01-02 00:00:00',
                         period=120)
