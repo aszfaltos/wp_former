@@ -1,4 +1,6 @@
 trained/
+.venv/
 venv/
 tmp/
 data/
+.idea/
