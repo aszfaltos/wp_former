@@ -1,6 +1,8 @@
+import datetime
 import os
 from shutil import rmtree
 import logging
+import pandas as pd
 
 from utils import exit_handling
 
@@ -73,3 +75,11 @@ def exiting(logger: logging.Logger, temp_path: str):
 
     logger.info('Cleaning up temporary files...')
     rmtree(temp_path)
+
+
+def check_datetime(date_str: str):
+    try:
+        pd.to_datetime(date_str, format='%Y-%m-%d %H:%M:%S')
+        return True
+    except ValueError:
+        return False
