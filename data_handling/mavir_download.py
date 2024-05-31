@@ -3,13 +3,12 @@ import os
 import time
 import warnings
 from datetime import datetime
-from shutil import rmtree
 from enum import Enum
 import logging
 from requests import get as req_get
 import pandas as pd
 
-from utils import exit_handling
+from _utils import exiting
 
 # TODO: make this env var for docker
 TEMP_DATA_PATH = 'temp_data'
@@ -17,17 +16,6 @@ TEMP_DATA_PATH = 'temp_data'
 # TODO: Create custom logger for the whole codebase should send you emails about errors when run in docker
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def exiting():
-    if exit_handling.exit_hooks.exit_code != 0 or exit_handling.exit_hooks.exception is not None:
-        logger.warning("Download may be corrupted, because program was interrupted or an exception occurred!")
-
-    if not os.path.exists(TEMP_DATA_PATH):
-        return
-
-    logger.info('Cleaning up temporary files...')
-    rmtree(TEMP_DATA_PATH)
 
 
 class PeriodType(Enum):
@@ -185,5 +173,5 @@ def main():
 
 
 if __name__ == '__main__':
-    atexit.register(exiting)
+    atexit.register(exiting, logger, TEMP_DATA_PATH)
     main()
