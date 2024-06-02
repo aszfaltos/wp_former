@@ -11,6 +11,7 @@ import pandas as pd
 import atexit
 from enum import Enum
 from dataclasses import dataclass
+import math
 
 from ._utils import exiting, omsz_csv_type_dict
 
@@ -208,11 +209,54 @@ def format_csv(file_path: str, start_date: str, end_date: str) -> pd.DataFrame |
         df.index = df['Time']
         df.drop('Time', axis=1, inplace=True)
 
-        df.dropna(how='all', axis=1, inplace=True)
+        # convert fxdat to minutes
+        df['fxdat'] = [int(str(t).split(':')[0]) * 60 + int(str(t).split(':')[1])
+                       if pd.notna(t) else None for t in df['fxdat']]
+
+        # put weather codes on a unit circle to make the average meaningful
+        # (this is a dimensional expansion, maybe need more dimensions)
+        weather_codes_list = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12,
+                              101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 112,
+                              202, 203, 208, 209, 304, 310, 500, 600, 601]
+        x_coordinates = [math.cos(2*math.pi/len(weather_codes_list)*i) for i in range(len(weather_codes_list))]
+        y_coordinates = [math.sin(2*math.pi/len(weather_codes_list)*i) for i in range(len(weather_codes_list))]
+        df['Weather Code X'] = [x_coordinates[weather_codes_list.index(code)] if pd.notna(code) else None
+                                for code in df['we']]
+        df['Weather Code Y'] = [y_coordinates[weather_codes_list.index(code)] if pd.notna(code) else None
+                                for code in df['we']]
+
         # 'suv' column doesn't exist in some instances
-        df.drop(['StationNumber', 't', 'tn', 'tx', 'v', 'fs', 'fsd', 'fx', 'fxd', 'fxdat', 'fd', 'et5', 'et10', 'et20',
-                 'et50', 'et100', 'tsn', 'suv'], axis=1, inplace=True, errors='ignore')
-        # TODO: check which one of these are important for you
+        df.rename(columns={'r': 'Precipitation [mm]',
+                           't': 'Temperature [°C]',
+                           'ta': 'Average Temperature [°C]',
+                           'tn': 'Min Temperature [°C]',
+                           'tx': 'Max Temperature [°C]',
+                           'v': 'Visibility [m]',
+                           'p': 'Pressure [hPa]',
+                           'u': 'Humidity [%]',
+                           'sg': 'Average Gamma Radiation [nSv/h]',
+                           'sr': 'Average Solar Radiation [J/cm^2]',
+                           'suv': 'UV Radiation Sum [MED]',
+                           'fs': 'Wind Speed [m/s]',
+                           'fsd': 'Wind Direction [°]',
+                           'fx': 'Max Wind Speed [m/s]',
+                           'fxd': 'Max Wind Direction [°]',
+                           'fxdat': 'Max Wind Time [min]',
+                           'p0': 'Pressure at Sea Level [hPa]',
+                           'f': 'Average Wind Speed [m/s]',
+                           'fd': 'Average Wind Direction [°]',
+                           'et5': 'Ground Temperature 5cm [°C]',
+                           'et10': 'Ground Temperature 10cm [°C]',
+                           'et20': 'Ground Temperature 20cm [°C]',
+                           'et50': 'Ground Temperature 50cm [°C]',
+                           'et100': 'Ground Temperature 100cm [°C]',
+                           'tsn': 'Close to Ground Min Temperature [°C]',
+                           'tviz': 'Water Temperature [°C]'},
+                  inplace=True)
+        df.drop(['StationNumber', 'we', 'Q_r', 'Q_t', 'Q_ta', 'Q_tn', 'Q_tx', 'Q_v', 'Q_p', 'Q_u', 'Q_sg', 'Q_sr',
+                 'Q_suv', 'Q_fs', 'Q_fsd', 'Q_fx', 'Q_fxd', 'Q_fxdat', 'Q_we', 'Q_p0', 'Q_f', 'Q_fd',
+                 'Q_et5', 'Q_et10', 'Q_et20', 'Q_et50', 'Q_et100', 'Q_tsn', 'Q_tviz', 'EOR'],
+                axis=1, inplace=True, errors='ignore')
 
         df = df[start_date:end_date]
         return df
@@ -225,11 +269,11 @@ def main():
     download_omsz_data('../data/omsz_data/test_min',
                        '2021-01-01 00:00:00',
                        '2024-01-02 00:00:00',
-                       PeriodType.MIN)
+                       10)
     download_omsz_data('../data/omsz_data/test_hour',
                        '2021-01-01 00:00:00',
                        '2024-01-02 00:00:00',
-                       PeriodType.HOUR)
+                       60)
 
 
 if __name__ == '__main__':

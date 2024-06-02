@@ -125,17 +125,17 @@ def format_csv(dataframe: pd.DataFrame):
     dataframe.index = pd.to_datetime(dataframe['Időpont'], utc=True)
     dataframe.index.name = 'Time'
 
-    dataframe.drop(['Időpont',
-                    'Szélerőművek tény - nettó kereskedelmi elszámolási',
-                    'Szélerőművek tény - nettó üzemirányítási',
-                    'Szélerőművek tény - bruttó üzemirányítási 1p'],
-                   inplace=True, axis=1)
+    dataframe.drop(['Időpont'], inplace=True, axis=1)
 
-    dataframe.dropna(axis=0, inplace=True)
-    dataframe.rename(columns={'Szélerőművek tény - bruttó üzemirányítási': 'Wind Power [MW] (actual)',
-                              'Szélerőművek becsült termelése (aktuális)': 'Wind Power [MW] (estimated)',
-                              'Szélerőművek becsült termelése (dayahead)': 'Wind Power [MW] (dayahead)',
-                              'Szélerőművek becsült termelése (intraday)': 'Wind Power [MW] (intraday)'},
+    dataframe.rename(columns={'Szélerőművek tény - bruttó üzemirányítási': 'Wind Power [MW] (Gross control)',
+                              'Szélerőművek becsült termelése (aktuális)': 'Estimated Wind Power [MW] (current)',
+                              'Szélerőművek becsült termelése (dayahead)': 'Estimated Wind Power [MW] (dayahead)',
+                              'Szélerőművek becsült termelése (intraday)': 'Estimated Wind Power [MW] (intraday)',
+                              'Szélerőművek tény - nettó kereskedelmi elszámolási':
+                                  'Wind Power [MW] (Net commercial settlement)',
+                              'Szélerőművek tény - nettó üzemirányítási': 'Wind Power [MW] (Net control)',
+                              'Szélerőművek tény - bruttó üzemirányítási 1p': 'Wind Power [MW] (Gross control 1p)'
+                              },
                      inplace=True)
     return dataframe
 
