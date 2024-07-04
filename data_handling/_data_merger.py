@@ -62,10 +62,11 @@ def load_omsz_data(path: str, regions: list[str] | None = None):
     for key, value in columns.items():
         df = pd.DataFrame(index=time_column)
         df = pd.concat([df, *value], axis=1)
+        print(key, df.notna().sum(axis=1).max())
         combined[key] = df.mean(axis=1, skipna=True)
 
     return combined
 
 
 if __name__ == '__main__':
-    merge_data('../data/hourly', regions=['Vas'], columns=None)
+    merge_data('../data/hourly', regions=None, columns=None)

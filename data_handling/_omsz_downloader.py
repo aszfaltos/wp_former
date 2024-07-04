@@ -213,18 +213,6 @@ def format_csv(file_path: str, start_date: str, end_date: str) -> pd.DataFrame |
         df['fxdat'] = [int(str(t).split(':')[0]) * 60 + int(str(t).split(':')[1])
                        if pd.notna(t) else None for t in df['fxdat']]
 
-        # put weather codes on a unit circle to make the average meaningful
-        # (this is a dimensional expansion, maybe need more dimensions)
-        weather_codes_list = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12,
-                              101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 112,
-                              202, 203, 208, 209, 304, 310, 500, 600, 601]
-        x_coordinates = [math.cos(2*math.pi/len(weather_codes_list)*i) for i in range(len(weather_codes_list))]
-        y_coordinates = [math.sin(2*math.pi/len(weather_codes_list)*i) for i in range(len(weather_codes_list))]
-        df['Weather Code X'] = [x_coordinates[weather_codes_list.index(code)] if pd.notna(code) else None
-                                for code in df['we']]
-        df['Weather Code Y'] = [y_coordinates[weather_codes_list.index(code)] if pd.notna(code) else None
-                                for code in df['we']]
-
         # 'suv' column doesn't exist in some instances
         df.rename(columns={'r': 'Precipitation [mm]',
                            't': 'Temperature [°C]',
