@@ -65,6 +65,11 @@ omsz_csv_type_dict = {
     'Q_tviz': 'str',
 }
 
+regions = ['Budapest XII.', 'Heves', 'Budapest II.', 'Szabolcs-Szatmár-Bereg', 'Somogy', 'Budapest XI.', 'Vas',
+           'Budapest XIV.', 'Győr-Moson-Sopron', 'Komárom-Esztergom', 'Budapest IV.', 'Békés', 'Baranya',
+           'Budapest XVIII.', 'Bács-Kiskun', 'Pest', 'Nógrád', 'Zala', 'Csongrád-Csanád', 'Jász-Nagykun-Szolnok',
+           'Borsod-Abaúj-Zemplén', 'Fejér', 'Tolna', 'Veszprém', 'Hajdú-Bihar']
+
 
 def exiting(logger: logging.Logger, temp_path: str):
     if exit_handling.exit_hooks.exit_code != 0 or exit_handling.exit_hooks.exception is not None:
