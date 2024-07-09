@@ -5,3 +5,8 @@ tmp/
 data/
 temp_data/
 .idea/
+.env
+*/__pycache__/
+*/.pytest_cache/
+*/.mypy_cache/
+*/.coverage
