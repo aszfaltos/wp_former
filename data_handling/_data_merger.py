@@ -2,9 +2,10 @@ import os
 import re
 
 import pandas as pd
+from utils import Logger
 
 
-def merge_data(path: str, regions: list[str] | None = None, columns: list[str] | None = None):
+def merge_data(path: str, regions: list[str] | None = None, columns: list[str] | None = None, logger=None):
     """
     Merges the OMSZ and mavir data and saves it to a csv file.
     It has to aggregate the OMSZ data since it is taken in multiple stations.
@@ -13,21 +14,33 @@ def merge_data(path: str, regions: list[str] | None = None, columns: list[str] |
     At the end the csv will be saved in this folder.
     :param regions: The regions to include meteorological data from in the csv, if None all regions will be included.
     :param columns: The columns to include in the csv, if None all columns will be included.
+    :param logger: The logger to use.
     """
-    mavir_data = load_mavir_data(path)
-    omsz_data = load_omsz_data(path, regions)
+    if logger is None:
+        logger = Logger(__name__)
+
+    mavir_data = load_mavir_data(path, logger)
+    omsz_data = load_omsz_data(path, regions, logger)
     merged = pd.merge(mavir_data, omsz_data, left_index=True, right_index=True, how='inner')
     if columns is not None:
-        merged = merged[columns]
+        try:
+            merged = merged[columns]
+        except KeyError as e:
+            logger.error(f'Columns were not found in the data. Skipping column selection.\n\tException: {e}')
 
     merged.to_csv(os.path.join(path, 'merged_data.csv'), sep=',', decimal='.', date_format='%Y-%m-%d %H:%M:%S')
 
 
-def load_mavir_data(path: str):
-    return pd.read_csv(os.path.join(path, 'mavir', 'wind.csv'), date_format='%Y-%m-%d %H:%M:%S', index_col='Time')
+def load_mavir_data(path: str, logger=None):
+    logger.info('Loading MAVIR data...')
+    df = pd.read_csv(os.path.join(path, 'mavir', 'wind.csv'), date_format='%Y-%m-%d %H:%M:%S', index_col='Time')
+    logger.info('MAVIR data loaded.')
+    return df
 
 
-def load_omsz_data(path: str, regions: list[str] | None = None):
+def load_omsz_data(path: str, regions: list[str] | None = None, logger=None):
+    logger.info('Loading OMSZ data...')
+
     metadata = pd.read_csv(os.path.join(path, 'omsz', 'station_meta_auto.csv'), index_col='StationNumber')
 
     stations_to_read = None
@@ -59,11 +72,14 @@ def load_omsz_data(path: str, regions: list[str] | None = None):
             columns[column].append(df[column])
 
     combined = pd.DataFrame(index=time_column)
+    logger.debug(f'Combining {len(columns)} columns...')
     for key, value in columns.items():
         df = pd.DataFrame(index=time_column)
         df = pd.concat([df, *value], axis=1)
+        logger.debug(f'Combining {key}: {df.count(axis=1).max()} stations had data for this column.')
         combined[key] = df.mean(axis=1, skipna=True)
 
+    logger.info('OMSZ data loaded.')
     return combined
 
 

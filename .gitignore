@@ -10,3 +10,4 @@ temp_data/
 */.pytest_cache/
 */.mypy_cache/
 */.coverage
+logs/

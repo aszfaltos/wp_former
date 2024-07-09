@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 
 class WpFormatter(logging.Formatter):
@@ -37,6 +38,8 @@ class ProgressConsoleHandler(logging.StreamHandler):
             same_line = hasattr(record, 'same_line')
             if self.on_same_line and not same_line:
                 stream.write(self.terminator)
+            if self.on_same_line and same_line:
+                stream.write('\r\033[0K')
             stream.write(msg)
             if same_line:
                 stream.write('... ')
@@ -51,35 +54,27 @@ class ProgressConsoleHandler(logging.StreamHandler):
             self.handleError(record)
 
 
-class Logger:
-    def __init__(self, app_name: str, log_level: int = logging.INFO):
-        self.logger = logging.getLogger(app_name)
-        self.logger.setLevel(log_level)
+class Logger(logging.Logger):
+    def __init__(self, name: str, level: int = logging.INFO):
+        super().__init__(name, level)
+
+        self.setLevel(logging.DEBUG)
 
         pch = ProgressConsoleHandler()
-        fh = logging.FileHandler(f'{app_name}.log')
+        pch.setLevel(level)
+
+        logs_dir = Path('.').joinpath('logs')
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(f'logs/{name}.log', encoding='utf-8')
+        fh.setLevel(logging.DEBUG)
 
         formatter = WpFormatter()
         pch.setFormatter(formatter)
         fh.setFormatter(formatter)
 
-        self.logger.addHandler(pch)
-        self.logger.addHandler(fh)
+        self.propagate = False
 
-    def debug(self, message: str, same_line: bool = False, email: bool = False):
-        self.logger.debug(message, extra={'same_line': same_line})
+        self.addHandler(pch)
+        self.addHandler(fh)
 
-    def info(self, message: str, same_line: bool = False, email: bool = False):
-        self.logger.info(message, extra={'same_line': same_line})
 
-    def warning(self, message: str, same_line: bool = False, email: bool = False):
-        self.logger.warning(message, extra={'same_line': same_line})
-
-    def error(self, message: str, same_line: bool = False, email: bool = False):
-        self.logger.error(message, extra={'same_line': same_line})
-
-    def critical(self, message: str, same_line: bool = False, email: bool = False):
-        self.logger.critical(message, extra={'same_line': same_line})
-
-    def _send_email(self, message: str):
-        pass
