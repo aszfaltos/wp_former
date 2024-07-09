@@ -3,4 +3,5 @@ trained/
 venv/
 tmp/
 data/
+temp_data/
 .idea/
