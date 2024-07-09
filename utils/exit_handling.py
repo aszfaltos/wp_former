@@ -6,7 +6,7 @@ class ExitHooks(object):
         self.exit_code = 0
         self.exception = None
         self._orig_exit = sys.exit
-        self._orig_exc_handler = self.exc_handler
+        self._orig_exc_handler = sys.excepthook
 
     def hook(self):
         sys.exit = self.exit
@@ -16,9 +16,9 @@ class ExitHooks(object):
         self.exit_code = code
         self._orig_exit(code)
 
-    def exc_handler(self, exc_type, exc, *args):
+    def exc_handler(self, exc_type, exc, tb):
         self.exception = exc
-        self._orig_exc_handler(self, exc_type, exc, *args)
+        self._orig_exc_handler(exc_type, exc, tb)
 
 
 exit_hooks = ExitHooks()
