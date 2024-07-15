@@ -4,18 +4,12 @@ import time
 import warnings
 from datetime import datetime
 from enum import Enum
-import logging
+from utils import Logger
 from requests import get as req_get
 import pandas as pd
+from dotenv import load_dotenv, find_dotenv
 
 from ._utils import exiting
-
-# TODO: make this env var for docker
-TEMP_DATA_PATH = 'temp_data'
-
-# TODO: Create custom logger for the whole codebase should send you emails about errors when run in docker
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class PeriodType(Enum):
@@ -23,16 +17,22 @@ class PeriodType(Enum):
     HOUR = 'hour'
 
 
-def download_mavir_data(path: str, from_time: str, to_time: str, period=10):
+def download_mavir_data(path: str, from_time: str, to_time: str, period=10, logger: Logger | None = None):
     """
     Downloads data from MAVIR.
     :param path: path to save the data
     :param from_time: in format 'YYYY-MM-DD hh:mm:ss'
     :param to_time: in format 'YYYY-MM-DD hh:mm:ss'
     :param period: period of the data in minutes
+    :param logger: logger to use
     :return:
     """
-    atexit.register(exiting, logger, TEMP_DATA_PATH)
+    if logger is None:
+        logger = Logger(__name__)
+
+    load_dotenv(find_dotenv())
+
+    atexit.register(exiting, logger, os.getenv('TEMP_DATA_PATH'))
 
     from_in_ms = prep_datetime(from_time)
     to_in_ms = prep_datetime(to_time)
@@ -50,19 +50,19 @@ def download_mavir_data(path: str, from_time: str, to_time: str, period=10):
     # Sleep is needed to not spam the api.
     sleep_time = 5
     for i in range(0, n):
-        logger.info(f"Downloading {i+1}. fragment")
         start = datetime.now()
 
         df = download_from_to(f'mavir_{i}',
                               from_in_ms + i * fraction_in_ms,
                               from_in_ms + (i + 1) * fraction_in_ms,
                               period=formatted_period,
-                              period_type=period_type)
+                              period_type=period_type,
+                              logger=logger)
         if isinstance(df, pd.DataFrame):
             dfs.append(df)
 
         runtime = (datetime.now() - start).total_seconds()
-        logger.info(f"Downloaded {i+1}. fragment in {runtime} seconds")
+        logger.info(f"Downloaded {i+1}. fragment in {runtime} seconds", extra={'one_line': True})
 
         time.sleep(sleep_time)
 
@@ -85,13 +85,13 @@ def prep_datetime(dt: str):
 
 
 def download_from_to(name: str, from_time: int, to_time: int, period=10,
-                     period_type: PeriodType = PeriodType.MIN):
+                     period_type: PeriodType = PeriodType.MIN, logger: Logger | None = None):
     """
     Time should be given as ms.
     The measurements are taken every 10 minutes.
     """
-    if not os.path.exists(TEMP_DATA_PATH):
-        os.makedirs(TEMP_DATA_PATH)
+    if not os.path.exists(os.getenv('TEMP_DATA_PATH')):
+        os.makedirs(os.getenv('TEMP_DATA_PATH'))
 
     url = (f"https://www.mavir.hu/rtdwweb/webuser/chart/11840/export"
            f"?exportType=xlsx"
@@ -100,13 +100,13 @@ def download_from_to(name: str, from_time: int, to_time: int, period=10,
            f"&periodType={period_type.value}"
            f"&period={period}")
 
-    temp_path = os.path.join(TEMP_DATA_PATH, f'{name}.xlsx')
+    temp_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{name}.xlsx')
     response = req_get(url, timeout=240)
 
     if response.status_code == 200:
         with open(temp_path, 'wb') as f:
             f.write(response.content)
-            logger.debug(f"Downloaded {temp_path}")
+            logger.debug(f"Downloaded {temp_path}", extra={'one_line': True})
     else:
         logger.error(f"Error {response.status_code} for request.\nError message: {response.content.decode()}")
         exit(1)

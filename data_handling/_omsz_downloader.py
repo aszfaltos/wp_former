@@ -6,22 +6,14 @@ import re
 import sys
 from zipfile import ZipFile
 import os
-import logging
 import pandas as pd
 import atexit
 from enum import Enum
 from dataclasses import dataclass
-import math
+from dotenv import load_dotenv, find_dotenv
+from utils import Logger
 
 from ._utils import exiting, omsz_csv_type_dict
-
-
-# TODO: make this env var for docker
-TEMP_DATA_PATH = 'temp_data'
-
-# TODO: Create custom logger for the whole codebase should send you emails about errors when run in docker
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class PeriodType(Enum):
@@ -37,7 +29,7 @@ class OMSZData:
     meta_data_file: str = 'station_meta_auto.csv'
 
 
-def download_omsz_data(path: str, from_time: str, to_time: str, period: int):
+def download_omsz_data(path: str, from_time: str, to_time: str, period: int, logger: Logger | None = None):
     """
     Downloads data from OMSZ.
     :param path: The path to save the data.
@@ -45,7 +37,12 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int):
     :param to_time: The end time in format "YYYY-MM-DD hh:mm:ss".
     :param period: The period of the data in minutes, data is only available in 10 and 60 minute periods.
     """
-    atexit.register(exiting, logger, TEMP_DATA_PATH)
+    if logger is None:
+        logger = Logger(__name__)
+
+    load_dotenv(find_dotenv())
+
+    atexit.register(exiting, logger, os.getenv('TEMP_DATA_PATH'))
 
     if period == 10:
         period_type = PeriodType.MIN
@@ -57,10 +54,10 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int):
 
     if not os.path.exists(path):
         os.makedirs(path)
-    if not os.path.exists(TEMP_DATA_PATH):
-        os.makedirs(TEMP_DATA_PATH)
+    if not os.path.exists(os.getenv('TEMP_DATA_PATH')):
+        os.makedirs(os.getenv('TEMP_DATA_PATH'))
 
-    meta_data = download_meta_data(TEMP_DATA_PATH, period_type)
+    meta_data = download_meta_data(os.getenv('TEMP_DATA_PATH'), period_type, logger)
     meta_data.to_csv(os.path.join(path, OMSZData.meta_data_file), sep=',')
 
     omsz_historical_url = os.path.join(OMSZData.base_url, period_type.value, OMSZData.historical_url)
@@ -77,18 +74,18 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int):
 
     station_numbers = list(meta_data.index.values)
 
-    download_stations('historical', historical_download_dict)
-    download_stations('recent', recent_download_dict)
+    download_stations('historical', historical_download_dict, logger)
+    download_stations('recent', recent_download_dict, logger)
 
-    historical_csvs = unpack_stations('historical', station_numbers)
-    recent_csvs = unpack_stations('recent', station_numbers)
+    historical_csvs = unpack_stations('historical', station_numbers, logger)
+    recent_csvs = unpack_stations('recent', station_numbers, logger)
 
-    concat_csvs(path, historical_csvs, recent_csvs, from_time, to_time)
+    concat_csvs(path, historical_csvs, recent_csvs, from_time, to_time, logger)
 
     atexit.unregister(exiting)
 
 
-def download_meta_data(path: str, period_type: PeriodType) -> pd.DataFrame | None:
+def download_meta_data(path: str, period_type: PeriodType, logger: Logger) -> pd.DataFrame | None:
     omsz_meta_url = os.path.join(OMSZData.base_url, period_type.value, OMSZData.meta_data_file)
     omsz_meta_page = req_get(omsz_meta_url)
     omsz_meta_save_path = os.path.join(path, OMSZData.meta_data_file)
@@ -137,18 +134,18 @@ def get_down_links(url: str, historical: bool) -> list[str]:
     return [f"{url}{file}" for file in file_download]
 
 
-def download_stations(group: str, download_dict: dict[int, str]):
+def download_stations(group: str, download_dict: dict[int, str], logger: Logger):
     for station_number, link in download_dict.items():
-        temp_path = os.path.join(TEMP_DATA_PATH, f'{group}_{station_number}.zip')
-        download(link, temp_path)
+        temp_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{group}_{station_number}.zip')
+        download(link, temp_path, logger)
 
 
-def download(url: str, path: str) -> bool:
+def download(url: str, path: str, logger: Logger) -> bool:
     response = req_get(url, timeout=60)
     if response.status_code == 200:
         with open(path, 'wb') as f:
             f.write(response.content)
-            logger.info(f'Downloaded {path}')
+            logger.info(f'Downloaded {path}', extra={'one_line': True})
 
         return True
 
@@ -156,18 +153,18 @@ def download(url: str, path: str) -> bool:
     return False
 
 
-def unpack_stations(group: str, station_numbers: list[int]):
+def unpack_stations(group: str, station_numbers: list[int], logger: Logger):
     csv_paths = {}
 
     for station_number in station_numbers:
-        temp_path = os.path.join(TEMP_DATA_PATH, f'{group}_{station_number}.zip')
+        temp_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{group}_{station_number}.zip')
         try:
             with ZipFile(temp_path, 'r') as zip_obj:
-                unzipped_path = os.path.join(TEMP_DATA_PATH, f'{group}_{station_number}')
+                unzipped_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{group}_{station_number}')
                 zip_obj.extractall(unzipped_path)
 
             csv_paths[station_number] = os.path.join(unzipped_path, os.listdir(unzipped_path)[0])
-            logger.info(f'Unpacked {csv_paths[station_number]}')
+            logger.info(f'Unpacked {csv_paths[station_number]}', extra={'one_line': True})
         except Exception as e:
             logger.error(f'Exception {e} for {temp_path}')
             continue
@@ -179,22 +176,23 @@ def concat_csvs(save_path: str,
                 historical_csvs: dict[int, str],
                 recent_csvs: dict[int, str],
                 start_date: str,
-                end_date: str):
+                end_date: str,
+                logger: Logger):
     station_numbers = list(set(recent_csvs.keys()).intersection(set(historical_csvs.keys())))
     for station_number in station_numbers:
-        historical_df = format_csv(historical_csvs[station_number], start_date, end_date)
-        recent_df = format_csv(recent_csvs[station_number], start_date, end_date)
+        historical_df = format_csv(historical_csvs[station_number], start_date, end_date, logger)
+        recent_df = format_csv(recent_csvs[station_number], start_date, end_date, logger)
         if historical_df is None or recent_df is None:
-            logger.warning(f'Throwing away: {station_number}, ')
+            logger.warning(f'Throwing away: {station_number}')
             continue
 
         station_data = pd.concat([historical_df, recent_df])
         csv_name = f'omsz_{station_number}.csv'
         station_data.to_csv(os.path.join(save_path, csv_name), sep=',')
-        logger.info(f"Extracted and formatted: {csv_name}")
+        logger.info(f"Extracted and formatted: {csv_name}", extra={'one_line': True})
 
 
-def format_csv(file_path: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+def format_csv(file_path: str, start_date: str, end_date: str, logger: Logger) -> pd.DataFrame | None:
     try:
         df: pd.DataFrame = pd.read_csv(file_path,
                                        skiprows=4,  # skip metadata of csv
