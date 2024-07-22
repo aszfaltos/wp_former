@@ -1,15 +1,15 @@
 import numpy as np
 import torch
 
-from data_handling.data_loader import load_mavir_data
+from data_handling import data_loader
 from trainer_lib import Grid, transformer_grid_search, TrainerOptions, GridSearchOptions
 import utils
 from signal_decomposition import eemd, wavelet
 
 
 def load_data(sample_size, start_idx):
-    df = load_mavir_data('data/mavir_data/mavir.csv')
-    df['Power'] = utils.min_max_norm(df['Power'])
+    df = data_loader.load_data('data/hourly/region_wide_aggregated.csv')
+    df = df.apply(utils.min_max_norm)
     return utils.sample(df, sample_size, start_idx=start_idx)
 
 
@@ -34,8 +34,6 @@ def set_default_options():
         learning_rate=1e-3,
         learning_rate_decay=.999,
         weight_decay=1e-5,
-        warmup_steps=10,
-        warmup_start_factor=1e-6,
         gradient_accumulation_steps=8,
         early_stopping_patience=30,
         early_stopping_min_delta=0.01,
@@ -128,20 +126,20 @@ def train_wavelet_vp_transformer(training_data):
                             preprocessor=wavelet.WaveletPreprocessor('db2'))
 
 
-def train_lstm(training_data):
+def train_lstm(training_data, logger):
     _, training_opts = set_default_options()
 
     params = {
         'kind': ['lstm'],
-        'features': [1],
+        'features': [3],
         'hidden_size': [15],
         'num_layers': [2],
         'dropout': [.1],
         'in_noise': [.0],
         'hid_noise': [.0],
         'bidirectional': [True],
-        'src_seq_length': [24 * 8],
-        'tgt_seq_length': [1],
+        'src_seq_length': [24],
+        'tgt_seq_length': [3],
         'src_window': [1],
         'tgt_window': [1],
     }
@@ -152,32 +150,23 @@ def train_lstm(training_data):
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
-        random_seed=50,
-        use_start_token=True,
+        random_seed=42,
+        use_start_token=False,
         preprocess_y=False
     )
 
-    transformer_grid_search(grid, training_data, training_opts, grid_search_opts)
+    transformer_grid_search(grid, training_data, training_opts, grid_search_opts, logger)
 
 
 def main():
+    logger = utils.Logger('trainer')
+
     sample = load_data(5000, 0)
-    sample = sample['Power'].to_numpy()
-    print('data loaded')
+    sample = sample[['Wind Power [MW] (Net control)', 'Temperature [°C]', 'Wind Speed [m/s]']].to_numpy()
+    logger.info('Data loaded.')
 
-    print('regular transformer:')
-    # train_regular_transformer(sample)
-    print('eemd transformer:')
-    #train_eemd_transformer(sample)
-    print('wlt transformer:')
-    # train_wavelet_transformer(sample)
-    print('wlt vp transformer:')
-    #train_wavelet_vp_transformer(sample)
-
-    print('lstm')
-    train_lstm(sample)
+    train_lstm(sample, logger)
 
 
 if __name__ == '__main__':
     main()
-    # TODO: test, lr, model sizes, wd, dropout, lr decay

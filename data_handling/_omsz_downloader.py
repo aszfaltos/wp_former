@@ -145,7 +145,7 @@ def download(url: str, path: str, logger: Logger) -> bool:
     if response.status_code == 200:
         with open(path, 'wb') as f:
             f.write(response.content)
-            logger.info(f'Downloaded {path}', extra={'one_line': True})
+            logger.info(f'Downloaded {path}', extra={'same_line': True, 'delete_prev': True})
 
         return True
 
@@ -164,7 +164,7 @@ def unpack_stations(group: str, station_numbers: list[int], logger: Logger):
                 zip_obj.extractall(unzipped_path)
 
             csv_paths[station_number] = os.path.join(unzipped_path, os.listdir(unzipped_path)[0])
-            logger.info(f'Unpacked {csv_paths[station_number]}', extra={'one_line': True})
+            logger.info(f'Unpacked {csv_paths[station_number]}', extra={'same_line': True, 'delete_prev': True})
         except Exception as e:
             logger.error(f'Exception {e} for {temp_path}')
             continue
@@ -189,7 +189,7 @@ def concat_csvs(save_path: str,
         station_data = pd.concat([historical_df, recent_df])
         csv_name = f'omsz_{station_number}.csv'
         station_data.to_csv(os.path.join(save_path, csv_name), sep=',')
-        logger.info(f"Extracted and formatted: {csv_name}", extra={'one_line': True})
+        logger.info(f"Extracted and formatted: {csv_name}", extra={'same_line': True, 'delete_prev': True})
 
 
 def format_csv(file_path: str, start_date: str, end_date: str, logger: Logger) -> pd.DataFrame | None:

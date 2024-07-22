@@ -62,7 +62,8 @@ def download_mavir_data(path: str, from_time: str, to_time: str, period=10, logg
             dfs.append(df)
 
         runtime = (datetime.now() - start).total_seconds()
-        logger.info(f"Downloaded {i+1}. fragment in {runtime} seconds", extra={'one_line': True})
+        logger.info(f"Downloaded {i+1}. fragment in {runtime} seconds",
+                    extra={'same_line': True, 'delete_prev': True})
 
         time.sleep(sleep_time)
 
@@ -106,7 +107,7 @@ def download_from_to(name: str, from_time: int, to_time: int, period=10,
     if response.status_code == 200:
         with open(temp_path, 'wb') as f:
             f.write(response.content)
-            logger.debug(f"Downloaded {temp_path}", extra={'one_line': True})
+            logger.debug(f"Downloaded {temp_path}", extra={'same_line': True, 'delete_prev': True})
     else:
         logger.error(f"Error {response.status_code} for request.\nError message: {response.content.decode()}")
         exit(1)

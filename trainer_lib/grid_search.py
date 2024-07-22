@@ -29,6 +29,7 @@ def transformer_grid_search(grid: Grid,
                             data: ndarray,
                             trainer_options: TrainerOptions,
                             opts: GridSearchOptions,
+                            logger: utils.Logger,
                             preprocessor: Preprocessor | None = None):
     path = os.path.abspath(opts.root_save_path)
     names = utils.generate_name(len(grid), opts.random_seed)
@@ -66,7 +67,7 @@ def transformer_grid_search(grid: Grid,
         with open(os.path.join(trainer_options.save_path, 'params.json'), "w") as fp:
             json.dump(params, fp)
 
-        trainer = Trainer(model, trainer_options)
+        trainer = Trainer(model, trainer_options, logger)
         trainer.train(train_dataset, valid_dataset, test_dataset, lstm=(params['kind'] == 'lstm'))
 
 

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 from .early_stop import EarlyStopper
 from .utils import checkpoint
+from utils import Logger
 
 
 @dataclass
@@ -19,8 +20,6 @@ class TrainerOptions:
     learning_rate: float
     learning_rate_decay: float
     weight_decay: float
-    warmup_steps: int
-    warmup_start_factor: float
     gradient_accumulation_steps: int
 
     early_stopping_patience: int
@@ -33,30 +32,28 @@ class TrainerOptions:
 class Trainer:
     def __init__(self,
                  model: torch.nn.Module,
-                 opts: TrainerOptions):
+                 opts: TrainerOptions,
+                 logger: Logger):
         self.model = model
         self.opts = opts
         self.metrics = {'train': {'MSE': []},
                         'eval': {'MSE': [], 'RMSE': [], 'MAE': [], 'MAPE': []},
                         'test': {'MSE': .0, 'RMSE': .0, 'MAE': .0, 'MAPE': .0}}
+        self.logger = logger
         os.makedirs(self.opts.save_path, exist_ok=True)
 
     def train(self, train_data, valid_data, test_data, lstm=False):
         early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
         optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9,
                                weight_decay=self.opts.weight_decay)
-
-        warmup = optim.lr_scheduler.LinearLR(optimizer, self.opts.warmup_start_factor, 1.0,
-                                             total_iters=self.opts.warmup_steps)
-        exp_sch = optim.lr_scheduler.ExponentialLR(optimizer, self.opts.learning_rate_decay)
-        scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup, exp_sch], [self.opts.warmup_steps])
-
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, self.opts.learning_rate_decay)
         mse = nn.MSELoss()
 
         train_loader = DataLoader(train_data, self.opts.batch_size)
         valid_loader = DataLoader(valid_data, self.opts.batch_size)
         test_loader = DataLoader(test_data, self.opts.batch_size)
-        print(f'Train size: {len(train_data)}, Validation size: {len(valid_data)}, Test size: {len(valid_data)}')
+        (self.logger
+         .info(f'Train size: {len(train_data)}, Validation size: {len(valid_data)}, Test size: {len(valid_data)}'))
 
         last_epoch = 0
         for epoch in range(self.opts.epochs):
@@ -73,6 +70,7 @@ class Trainer:
 
                 else:
                     output = self.model(src_data, tgt_data[:, :-1])
+
                 loss = mse(output, tgt_data[:, 1:])
                 train_loss += float(loss.item()) / len(train_loader)
                 loss = loss / self.opts.gradient_accumulation_steps
@@ -85,9 +83,8 @@ class Trainer:
 
             scheduler.step()
 
-            print(
-                f"Epoch: {epoch + 1}; Learning rate: {scheduler.get_last_lr()}; Train - MSE: {train_loss}",
-                end='')
+            self.logger.info(f"Epoch: {epoch + 1}; Learning rate: {scheduler.get_last_lr()}; Train - MSE: {train_loss}",
+                             extra={'same_line': True, 'delete_prev': True})
 
             self.metrics['train']['MSE'].append(train_loss)
             stop = self._evaluate(valid_loader, early_stopper, lstm)
@@ -98,7 +95,7 @@ class Trainer:
                     json.dump(self.metrics, fp)
 
             if stop:
-                print(f'Stopped after {epoch + 1} epochs.')
+                self.logger.info(f'Stopped after {epoch + 1} epochs.')
                 break
 
         self._test_model(test_loader, lstm)
@@ -135,11 +132,12 @@ class Trainer:
 
         self.model.train()
 
-        print(
+        self.logger.info(
             f"; Eval - MSE: {mse_loss}," +
             f" RMSE: {rmse_loss}," +
             f" MAE: {mae_loss}," +
-            f" MAPE: {round(mape_loss * 100, 4)}")
+            f" MAPE: {round(mape_loss * 100, 4)}",
+            extra={'same_line': True})
 
         self.metrics['eval']['MSE'].append(mse_loss)
         self.metrics['eval']['RMSE'].append(rmse_loss)
@@ -181,13 +179,12 @@ class Trainer:
 
         self.model.train()
 
-        print("-----------------------")
-        print(
-            f"Test - MSE: {mse_loss}," +
-            f" RMSE: {rmse_loss}," +
-            f" MAE: {mae_loss}," +
-            f" MAPE: {round(mape_loss * 100, 4)}")
-        print("-----------------------\n")
+        self.logger.info("-----------------------\n" +
+                         f"Test - MSE: {mse_loss}," +
+                         f" RMSE: {rmse_loss}," +
+                         f" MAE: {mae_loss}," +
+                         f" MAPE: {round(mape_loss * 100, 4)}\n" +
+                         "-----------------------\n")
 
         self.metrics['test']['MSE'] = mse_loss
         self.metrics['test']['RMSE'] = rmse_loss

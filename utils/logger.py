@@ -36,13 +36,13 @@ class ProgressConsoleHandler(logging.StreamHandler):
             msg = self.format(record)
             stream = self.stream
             same_line = hasattr(record, 'same_line')
+            delete_prev = hasattr(record, 'delete_prev')
             if self.on_same_line and not same_line:
                 stream.write(self.terminator)
-            if self.on_same_line and same_line:
+            if self.on_same_line and delete_prev:
                 stream.write('\r\033[0K')
             stream.write(msg)
             if same_line:
-                stream.write('... ')
                 self.on_same_line = True
             else:
                 stream.write(self.terminator)

@@ -5,13 +5,14 @@ import pandas as pd
 from utils import Logger
 
 
-def merge_data(path: str, regions: list[str] | None = None, columns: list[str] | None = None, logger=None):
+def merge_data(path: str, name: str, regions: list[str] | None = None, columns: list[str] | None = None, logger=None):
     """
     Merges the OMSZ and mavir data and saves it to a csv file.
     It has to aggregate the OMSZ data since it is taken in multiple stations.
 
     :param path: The path where the data has been downloaded, the folder has to contain a mavir and an omsz folder.
     At the end the csv will be saved in this folder.
+    :param name: The name of the csv file.
     :param regions: The regions to include meteorological data from in the csv, if None all regions will be included.
     :param columns: The columns to include in the csv, if None all columns will be included.
     :param logger: The logger to use.
@@ -28,7 +29,7 @@ def merge_data(path: str, regions: list[str] | None = None, columns: list[str] |
         except KeyError as e:
             logger.error(f'Columns were not found in the data. Skipping column selection.\n\tException: {e}')
 
-    merged.to_csv(os.path.join(path, 'merged_data.csv'), sep=',', decimal='.', date_format='%Y-%m-%d %H:%M:%S')
+    merged.to_csv(os.path.join(path, f'{name}.csv'), sep=',', decimal='.', date_format='%Y-%m-%d %H:%M:%S')
 
 
 def load_mavir_data(path: str, logger=None):
