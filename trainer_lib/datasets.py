@@ -51,16 +51,17 @@ class TimeSeriesWindowedTensorDataset(TensorDataset):
         y_seqs = []
         for i in range(0, data.shape[0] - (self.ws_x * self.sl_x + self.ws_y * self.sl_y), self.step_size):
             next_x = data[i:i + self.ws_x * self.sl_x]
-            # next_x = self.preprocessor.process(next_x)
+            next_x = self.preprocessor.process(next_x)
             self.vec_size_x = next_x.shape[-1]
-            x_seqs.append(np.array(next_x.reshape(self.sl_x, self.vec_size_x * self.ws_x), dtype=np.float32))
+            x_seqs.append(next_x.reshape(self.sl_x, self.vec_size_x * self.ws_x))
 
             next_y = data[i + self.ws_x * self.sl_x:i + self.ws_x * self.sl_x + self.ws_y * self.sl_y]
-            # if self.preprocess_y:
-            #    next_y = self.preprocessor.process(next_y)
-            # else:
-            #    next_y = np.array(next_y[..., np.newaxis], dtype=np.float32)
+            if self.preprocess_y:
+                next_y = self.preprocessor.process(next_y)
+            else:
+                next_y = np.array(next_y[:, np.newaxis, :], dtype=np.float32)
             self.vec_size_y = next_y.shape[-1]
+
             if self.add_start_token:
                 y_seqs.append(np.concatenate(
                     [np.ones((1, self.vec_size_y * self.ws_y)),
@@ -68,7 +69,7 @@ class TimeSeriesWindowedTensorDataset(TensorDataset):
                     dtype=np.float32)
                 )
             else:
-                y_seqs.append(np.array(next_y.reshape(self.sl_y, self.vec_size_y * self.ws_y), dtype=np.float32))
+                y_seqs.append(next_y.reshape(self.sl_y, self.vec_size_y * self.ws_y))
 
         return np.array(x_seqs), np.array(y_seqs)
 

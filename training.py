@@ -29,12 +29,12 @@ def set_default_options():
     grid = Grid(params)
 
     training_opts = TrainerOptions(
-        batch_size=8,
+        batch_size=1024,
         epochs=600,
         learning_rate=1e-3,
         learning_rate_decay=.999,
         weight_decay=1e-5,
-        gradient_accumulation_steps=8,
+        gradient_accumulation_steps=2,
         early_stopping_patience=30,
         early_stopping_min_delta=0.01,
         save_every_n_epochs=5,
@@ -131,9 +131,10 @@ def train_lstm(training_data, logger):
 
     params = {
         'kind': ['lstm'],
-        'features': [3],
-        'hidden_size': [15],
-        'num_layers': [2],
+        'in_features': [3],
+        'hidden_size': [10, 15, 20],
+        'num_layers': [1, 2],
+        'out_features': [3],
         'dropout': [.1],
         'in_noise': [.0],
         'hid_noise': [.0],
@@ -164,7 +165,6 @@ def main():
     sample = load_data(50000, 0)
     sample = sample.interpolate(method='linear', axis=0).ffill().bfill()
     sample = sample[['Wind Power [MW] (Net control)', 'Temperature [°C]', 'Wind Speed [m/s]']].to_numpy()
-    print(np.count_nonzero(np.isnan(sample)))
 
     logger.info('Data loaded.')
 

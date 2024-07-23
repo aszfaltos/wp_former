@@ -5,9 +5,10 @@ from dataclasses import dataclass
 
 @dataclass
 class LSTMParams:
-    features: int
+    in_features: int
     hidden_size: int
     num_layers: int
+    out_features: int
     dropout: float
     in_noise: float
     hid_noise: float
@@ -31,7 +32,7 @@ class GaussianNoise(nn.Module):
 
 class LSTMModel(nn.Module):
     def __init__(self,
-                 params: LSTMParams = LSTMParams(1, 15, 2, 0, 0, 0, True),
+                 params: LSTMParams = LSTMParams(1, 15, 2, 1, 0, 0, 0, True),
                  **kwargs):
         super(LSTMModel, self).__init__()
         self.hidden_size = params.hidden_size
@@ -39,7 +40,7 @@ class LSTMModel(nn.Module):
         self.num_layers = params.num_layers
         self.in_noise = GaussianNoise(params.in_noise)
         rec_drop = params.dropout if params.num_layers > 1 else 0.0
-        self.lstm = nn.LSTM(input_size=params.features,
+        self.lstm = nn.LSTM(input_size=params.in_features,
                             hidden_size=self.hidden_size,
                             num_layers=params.num_layers,
                             batch_first=True,
@@ -50,7 +51,7 @@ class LSTMModel(nn.Module):
             nn.Flatten(),
             GaussianNoise(params.hid_noise),
             nn.Dropout(params.dropout),
-            nn.Linear(self.hidden_size * self.h_n_dim * self.num_layers, 3)
+            nn.Linear(self.hidden_size * self.h_n_dim * self.num_layers, params.out_features)
         )
 
     def forward(self, x):

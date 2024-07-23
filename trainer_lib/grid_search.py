@@ -8,7 +8,7 @@ from torch import nn
 from utils import Logger
 from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
 from .permutation_grid import Grid
-from .trainer import Trainer, TrainerOptions
+from .trainer import LSTMTrainer, TrainerOptions
 from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams
 import numpy as np
 from signal_decomposition.preprocessor import Preprocessor
@@ -66,8 +66,8 @@ def grid_search(grid: Grid,
         with open(os.path.join(trainer_options.save_path, 'params.json'), "w") as fp:
             json.dump(params, fp)
 
-        trainer = Trainer(model, trainer_options, logger)
-        trainer.train(train_dataset, valid_dataset, test_dataset, lstm=(params['kind'] == 'lstm'))
+        trainer = LSTMTrainer(model, trainer_options, logger)
+        trainer.train_loop(train_dataset, valid_dataset, test_dataset)
 
 
 def create_model(params: dict, dataset: TimeSeriesWindowedTensorDataset) -> nn.Module:
@@ -100,9 +100,10 @@ def create_model(params: dict, dataset: TimeSeriesWindowedTensorDataset) -> nn.M
         model = Transformer(transformer_params)
         return model
     elif params['kind'] == 'lstm':
-        lstm_params = LSTMParams(features=dataset.vec_size_x,
+        lstm_params = LSTMParams(in_features=dataset.vec_size_x,
                                  hidden_size=params['hidden_size'],
                                  num_layers=params['num_layers'],
+                                 out_features=dataset.vec_size_y,
                                  dropout=params['dropout'],
                                  in_noise=params['in_noise'],
                                  hid_noise=params['hid_noise'],

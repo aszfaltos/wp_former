@@ -9,6 +9,7 @@ class WpFormatter(logging.Formatter):
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
     format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    minimal_format = "%(message)s"
 
     FORMATS = {
         logging.DEBUG: grey + format + reset,
@@ -18,8 +19,19 @@ class WpFormatter(logging.Formatter):
         logging.CRITICAL: bold_red + format + reset
     }
 
+    MINIMAL_FORMATS = {
+        logging.DEBUG: grey + minimal_format + reset,
+        logging.INFO: grey + minimal_format + reset,
+        logging.WARNING: yellow + minimal_format + reset,
+        logging.ERROR: red + minimal_format + reset,
+        logging.CRITICAL: bold_red + minimal_format + reset
+    }
+
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
+        if hasattr(record, 'minimal'):
+            log_fmt = self.MINIMAL_FORMATS.get(record.levelno)
+        else:
+            log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 

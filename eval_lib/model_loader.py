@@ -55,9 +55,10 @@ def model_from_params(params: dict, model_type) -> nn.Module:
         return model
     elif params['kind'] == 'lstm':
         lstm_params = LSTMParams(
-            features=params['features'],
+            in_features=params['in_features'],
             hidden_size=params['hidden_size'],
             num_layers=params['num_layers'],
+            out_features=params['out_features'],
             dropout=params['dropout'],
             in_noise=params['in_noise'],
             hid_noise=params['hid_noise'],
