@@ -12,6 +12,7 @@ from enum import Enum
 from dataclasses import dataclass
 from dotenv import load_dotenv, find_dotenv
 from utils import Logger
+import urllib.parse as urlparse
 
 from ._utils import exiting, omsz_csv_type_dict
 
@@ -60,8 +61,8 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int, log
     meta_data = download_meta_data(os.getenv('TEMP_DATA_PATH'), period_type, logger)
     meta_data.to_csv(os.path.join(path, OMSZData.meta_data_file), sep=',')
 
-    omsz_historical_url = os.path.join(OMSZData.base_url, period_type.value, OMSZData.historical_url)
-    omsz_recent_url = os.path.join(OMSZData.base_url, period_type.value, OMSZData.recent_url)
+    omsz_historical_url = urlparse.urljoin(OMSZData.base_url, f'{period_type.value}/{OMSZData.historical_url}')
+    omsz_recent_url = urlparse.urljoin(OMSZData.base_url, f'{period_type.value}/{OMSZData.recent_url}')
 
     historical_download_links = get_down_links(omsz_historical_url, True)
     recent_download_links = get_down_links(omsz_recent_url, False)
@@ -86,7 +87,7 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int, log
 
 
 def download_meta_data(path: str, period_type: PeriodType, logger: Logger) -> pd.DataFrame | None:
-    omsz_meta_url = os.path.join(OMSZData.base_url, period_type.value, OMSZData.meta_data_file)
+    omsz_meta_url = urlparse.urljoin(OMSZData.base_url, f'{period_type.value}/{OMSZData.meta_data_file}')
     omsz_meta_page = req_get(omsz_meta_url)
     omsz_meta_save_path = os.path.join(path, OMSZData.meta_data_file)
     if omsz_meta_page.status_code == 200:

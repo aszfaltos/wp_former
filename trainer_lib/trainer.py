@@ -34,7 +34,7 @@ class Trainer:
                  model: torch.nn.Module,
                  opts: TrainerOptions,
                  logger: Logger):
-        self.model = model
+        self.model = model.to('cuda')
         self.opts = opts
         self.metrics = {'train': {'MSE': []},
                         'eval': {'MSE': [], 'RMSE': [], 'MAE': [], 'MAPE': []},
@@ -63,15 +63,15 @@ class Trainer:
             for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
                 if lstm:
                     in_data = src_data
-                    for _ in range(tgt_data.shape[1] - 1):
+                    for _ in range(tgt_data.shape[1]):
                         out = self.model(in_data)
-                        in_data = torch.concat((in_data, out.unsqueeze(-1)), dim=1)
-                    output = in_data[:, -(tgt_data.shape[1]-1):]
+                        in_data = torch.concat((in_data, out.unsqueeze(-2)), dim=1)
+                    output = in_data[:, -(tgt_data.shape[1]):]
 
                 else:
                     output = self.model(src_data, tgt_data[:, :-1])
 
-                loss = mse(output, tgt_data[:, 1:])
+                loss = mse(output, tgt_data[:, :])
                 train_loss += float(loss.item()) / len(train_loader)
                 loss = loss / self.opts.gradient_accumulation_steps
                 loss.backward()
@@ -83,8 +83,7 @@ class Trainer:
 
             scheduler.step()
 
-            self.logger.info(f"Epoch: {epoch + 1}; Learning rate: {scheduler.get_last_lr()}; Train - MSE: {train_loss}",
-                             extra={'same_line': True, 'delete_prev': True})
+            self.logger.info(f"Epoch: {epoch + 1}; Learning rate: {scheduler.get_last_lr()}; Train - MSE: {train_loss}.")
 
             self.metrics['train']['MSE'].append(train_loss)
             stop = self._evaluate(valid_loader, early_stopper, lstm)
@@ -117,27 +116,26 @@ class Trainer:
             for src_data, tgt_data in data_loader:
                 if lstm:
                     in_data = src_data
-                    for _ in range(tgt_data.shape[1] - 1):
+                    for _ in range(tgt_data.shape[1]):
                         out = self.model(in_data)
-                        in_data = torch.concat((in_data, out.unsqueeze(-1)), dim=1)
-                    out = in_data[:, -(tgt_data.shape[1]-1):]
+                        in_data = torch.concat((in_data, out.unsqueeze(-2)), dim=1)
+                    out = in_data[:, -(tgt_data.shape[1]):]
                 else:
                     out = self.model(src_data, tgt_data[:, :-1])
 
-                loss = mse(out, tgt_data[:, 1:])
+                loss = mse(out, tgt_data[:, :])
                 mse_loss += float(loss.item()) / len(data_loader)
                 rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
-                mae_loss += float(mae(out, tgt_data[:, 1:]).item()) / len(data_loader)
-                mape_loss += mae_loss / float(sum(abs(tgt_data[:, 1:].reshape(-1))))
+                mae_loss += float(mae(out, tgt_data[:, :]).item()) / len(data_loader)
+                mape_loss += mae_loss / float(sum(abs(tgt_data[:, :].reshape(-1))))
 
         self.model.train()
 
         self.logger.info(
-            f"; Eval - MSE: {mse_loss}," +
+            f"Eval - MSE: {mse_loss}," +
             f" RMSE: {rmse_loss}," +
             f" MAE: {mae_loss}," +
-            f" MAPE: {round(mape_loss * 100, 4)}",
-            extra={'same_line': True})
+            f" MAPE: {round(mape_loss * 100, 4)}%.")
 
         self.metrics['eval']['MSE'].append(mse_loss)
         self.metrics['eval']['RMSE'].append(rmse_loss)
@@ -160,10 +158,10 @@ class Trainer:
             for src_data, tgt_data in data_loader:
                 if lstm:
                     in_data = src_data
-                    for _ in range(tgt_data.shape[1] - 1):
+                    for _ in range(tgt_data.shape[1]):
                         out = self.model(in_data)
-                        in_data = torch.concat((in_data, out), dim=1)
-                    out = in_data[:, -(tgt_data.shape[1]-1):]
+                        in_data = torch.concat((in_data, out.unsqueeze(-2)), dim=1)
+                    out = in_data[:, -(tgt_data.shape[1]):]
                 else:
                     ones = tgt_data[:, 0, :].reshape(tgt_data.shape[0], 1, tgt_data.shape[-1])
                     out = ones
@@ -171,11 +169,11 @@ class Trainer:
                         out = torch.concat((ones, self.model(src_data, out)), dim=1)
                     out = out[:, 1:]
 
-                loss = mse(out, tgt_data[:, 1:])
+                loss = mse(out, tgt_data[:, :])
                 mse_loss += float(loss.item()) / len(data_loader)
                 rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
-                mae_loss += float(mae(out[:, 1:], tgt_data[:, 1:]).item()) / len(data_loader)
-                mape_loss += mae_loss / float(abs(sum(tgt_data[:, 1:].reshape(-1))))
+                mae_loss += float(mae(out[:, :], tgt_data[:, :]).item()) / len(data_loader)
+                mape_loss += mae_loss / float(abs(sum(tgt_data[:, :].reshape(-1))))
 
         self.model.train()
 
@@ -183,7 +181,7 @@ class Trainer:
                          f"Test - MSE: {mse_loss}," +
                          f" RMSE: {rmse_loss}," +
                          f" MAE: {mae_loss}," +
-                         f" MAPE: {round(mape_loss * 100, 4)}\n" +
+                         f" MAPE: {round(mape_loss * 100, 4)}%\n" +
                          "-----------------------\n")
 
         self.metrics['test']['MSE'] = mse_loss

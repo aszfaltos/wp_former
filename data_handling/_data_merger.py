@@ -79,6 +79,7 @@ def load_omsz_data(path: str, regions: list[str] | None = None, logger=None):
         df = pd.concat([df, *value], axis=1)
         logger.debug(f'Combining {key}: {df.count(axis=1).max()} stations had data for this column.')
         combined[key] = df.mean(axis=1, skipna=True)
+        combined[key] = combined[key].interpolate(method='linear', axis=0).ffill().bfill()
 
     logger.info('OMSZ data loaded.')
     return combined

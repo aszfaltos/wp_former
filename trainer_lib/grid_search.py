@@ -5,7 +5,7 @@ import json
 from numpy import ndarray
 from torch import nn
 
-import utils
+from utils import Logger
 from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
 from .permutation_grid import Grid
 from .trainer import Trainer, TrainerOptions
@@ -25,14 +25,13 @@ class GridSearchOptions:
     preprocess_y: bool
 
 
-def transformer_grid_search(grid: Grid,
-                            data: ndarray,
-                            trainer_options: TrainerOptions,
-                            opts: GridSearchOptions,
-                            logger: utils.Logger,
-                            preprocessor: Preprocessor | None = None):
+def grid_search(grid: Grid,
+                data: ndarray,
+                trainer_options: TrainerOptions,
+                opts: GridSearchOptions,
+                logger: Logger,
+                preprocessor: Preprocessor | None = None):
     path = os.path.abspath(opts.root_save_path)
-    names = utils.generate_name(len(grid), opts.random_seed)
 
     for idx, params in enumerate(grid):
         params = dict(params)  # to help the typechecker not kill itself
@@ -62,7 +61,7 @@ def transformer_grid_search(grid: Grid,
 
         model = create_model(params, dataset)
 
-        trainer_options.save_path = os.path.join(path, names[idx])
+        trainer_options.save_path = os.path.join(path, str(idx))
         os.makedirs(trainer_options.save_path, exist_ok=True)
         with open(os.path.join(trainer_options.save_path, 'params.json'), "w") as fp:
             json.dump(params, fp)

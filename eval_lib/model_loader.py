@@ -2,7 +2,7 @@ import os
 import json
 from torch import nn
 import torch
-from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams
+from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMParams
 from trainer_lib.utils import resume
 
 
@@ -22,6 +22,7 @@ def load_model(test: str, name: str, epoch: int, model_type, path: str = 'traine
 
 
 def model_from_params(params: dict, model_type) -> nn.Module:
+    print(params['kind'])
     if params['kind'] == 'transformer':
         transformer_params = TransformerParams(
             src_size=params['src_size'] * params['src_window'],
@@ -51,4 +52,17 @@ def model_from_params(params: dict, model_type) -> nn.Module:
         )
 
         model = model_type(transformer_params)
+        return model
+    elif params['kind'] == 'lstm':
+        lstm_params = LSTMParams(
+            features=params['features'],
+            hidden_size=params['hidden_size'],
+            num_layers=params['num_layers'],
+            dropout=params['dropout'],
+            in_noise=params['in_noise'],
+            hid_noise=params['hid_noise'],
+            bidirectional=params['bidirectional']
+        )
+
+        model = model_type(lstm_params)
         return model

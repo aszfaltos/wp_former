@@ -2,13 +2,13 @@ import numpy as np
 import torch
 
 from data_handling import data_loader
-from trainer_lib import Grid, transformer_grid_search, TrainerOptions, GridSearchOptions
+from trainer_lib import Grid, grid_search, TrainerOptions, GridSearchOptions
 import utils
 from signal_decomposition import eemd, wavelet
 
 
 def load_data(sample_size, start_idx):
-    df = data_loader.load_data('data/hourly/region_wide_aggregated.csv')
+    df = data_loader.load_data('data/hourly/regional_aggregated_data.csv')
     df = df.apply(utils.min_max_norm)
     return utils.sample(df, sample_size, start_idx=start_idx)
 
@@ -30,7 +30,7 @@ def set_default_options():
 
     training_opts = TrainerOptions(
         batch_size=8,
-        epochs=30,
+        epochs=600,
         learning_rate=1e-3,
         learning_rate_decay=.999,
         weight_decay=1e-5,
@@ -155,14 +155,17 @@ def train_lstm(training_data, logger):
         preprocess_y=False
     )
 
-    transformer_grid_search(grid, training_data, training_opts, grid_search_opts, logger)
+    grid_search(grid, training_data, training_opts, grid_search_opts, logger)
 
 
 def main():
     logger = utils.Logger('trainer')
 
-    sample = load_data(5000, 0)
+    sample = load_data(50000, 0)
+    sample = sample.interpolate(method='linear', axis=0).ffill().bfill()
     sample = sample[['Wind Power [MW] (Net control)', 'Temperature [°C]', 'Wind Speed [m/s]']].to_numpy()
+    print(np.count_nonzero(np.isnan(sample)))
+
     logger.info('Data loaded.')
 
     train_lstm(sample, logger)
