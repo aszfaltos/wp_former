@@ -46,7 +46,6 @@ class LSTMModel(nn.Module):
                             batch_first=True,
                             bidirectional=params.bidirectional,
                             dropout=rec_drop)
-        # https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
         self.fc = nn.Sequential(
             nn.Flatten(),
             GaussianNoise(params.hid_noise),

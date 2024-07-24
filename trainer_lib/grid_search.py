@@ -12,6 +12,7 @@ from .trainer import LSTMTrainer, TrainerOptions
 from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams
 import numpy as np
 from signal_decomposition.preprocessor import Preprocessor
+from abc import ABC, abstractmethod
 
 
 @dataclass
@@ -25,88 +26,55 @@ class GridSearchOptions:
     preprocess_y: bool
 
 
-def grid_search(grid: Grid,
-                data: ndarray,
-                trainer_options: TrainerOptions,
-                opts: GridSearchOptions,
-                logger: Logger,
-                preprocessor: Preprocessor | None = None):
-    path = os.path.abspath(opts.root_save_path)
+class GridSearch(ABC):
+    def __init__(self,
+                 dataset: TimeSeriesWindowedTensorDataset,
+                 trainer_options: TrainerOptions,
+                 search_options: GridSearchOptions,
+                 logger: Logger | None = None):
+        self.trainer_options = trainer_options
+        self.opts = search_options
+        if logger is None:
+            logger = Logger('grid_search')
+        self.logger = logger
 
-    for idx, params in enumerate(grid):
-        params = dict(params)  # to help the typechecker not kill itself
+        valid_size = int(round(len(dataset) * self.opts.valid_split))
+        test_size = int(round(len(dataset) * self.opts.test_split))
 
-        dataset = TimeSeriesWindowedTensorDataset(data, TimeSeriesWindowedDatasetConfig(
-                                                          params['src_window'],
-                                                          params['tgt_window'],
-                                                          params['src_seq_length'],
-                                                          params['tgt_seq_length'],
-                                                          opts.window_step_size,
-                                                          opts.use_start_token,
-                                                          preprocess_y=opts.preprocess_y),
-                                                  preprocessor=preprocessor
-                                                  )
-
-        valid_size = int(round(len(dataset) * opts.valid_split))
-        test_size = int(round(len(dataset) * opts.test_split))
-
+        np.random.seed(self.opts.random_seed)
         ind = np.random.permutation(len(dataset))
 
-        train_dataset = dataset[ind[:-valid_size - test_size]]
-        valid_dataset = dataset[ind[-valid_size - test_size:-test_size]]
-        test_dataset = dataset[ind[-test_size:]]
+        self.dataset = dataset
+        self.train_dataset = dataset[ind[:-valid_size - test_size]]
+        self.valid_dataset = dataset[ind[-valid_size - test_size:-test_size]]
+        self.test_dataset = dataset[ind[-test_size:]]
 
-        params['src_size'] = dataset.vec_size_x
-        params['tgt_size'] = dataset.vec_size_y
+    def search(self, grid: Grid):
+        for idx, params in enumerate(grid):
+            model = self.create_model(dict(params))
+            self.logger.info(f"Training model {idx + 1}/{len(grid)} with params: {params}")
 
-        model = create_model(params, dataset)
+            self.trainer_options.save_path = os.path.join(os.path.abspath(self.opts.root_save_path), str(idx))
+            os.makedirs(self.trainer_options.save_path, exist_ok=True)
+            with open(os.path.join(self.trainer_options.save_path, 'params.json'), "w") as fp:
+                json.dump(params, fp)
 
-        trainer_options.save_path = os.path.join(path, str(idx))
-        os.makedirs(trainer_options.save_path, exist_ok=True)
-        with open(os.path.join(trainer_options.save_path, 'params.json'), "w") as fp:
-            json.dump(params, fp)
+            self.train_model(model)
 
-        trainer = LSTMTrainer(model, trainer_options, logger)
-        trainer.train_loop(train_dataset, valid_dataset, test_dataset)
+    @abstractmethod
+    def train_model(self, model: nn.Module):
+        pass
+
+    @abstractmethod
+    def create_model(self, params: dict) -> nn.Module:
+        pass
 
 
-def create_model(params: dict, dataset: TimeSeriesWindowedTensorDataset) -> nn.Module:
-    if params['kind'] == 'vp_transformer':
-        transformer_params = VPTransformerParams(
-            src_size=dataset.vec_size_x * dataset.ws_x,
-            tgt_size=dataset.vec_size_y * dataset.ws_y,
-            d_model=params['d_model'],
-            num_heads=params['num_heads'],
-            num_layers=params['num_layers'],
-            d_ff=params['d_ff'] * params['d_model'],
-            max_seq_length=max(dataset.sl_x, dataset.sl_y),
-            dropout=params['dropout'],
-            vp_bases=params['vp_bases'],
-            vp_penalty=params['vp_penalty']
-        )
-        model = VPTransformer(transformer_params)
-        return model
-    elif params['kind'] == 'transformer':
-        transformer_params = TransformerParams(
-            src_size=dataset.vec_size_x * dataset.ws_x,
-            tgt_size=dataset.vec_size_y * dataset.ws_y,
-            d_model=params['d_model'],
-            num_heads=params['num_heads'],
-            num_layers=params['num_layers'],
-            d_ff=params['d_ff'] * params['d_model'],
-            max_seq_length=max(dataset.sl_x, dataset.sl_y),
-            dropout=params['dropout']
-        )
-        model = Transformer(transformer_params)
-        return model
-    elif params['kind'] == 'lstm':
-        lstm_params = LSTMParams(in_features=dataset.vec_size_x,
-                                 hidden_size=params['hidden_size'],
-                                 num_layers=params['num_layers'],
-                                 out_features=dataset.vec_size_y,
-                                 dropout=params['dropout'],
-                                 in_noise=params['in_noise'],
-                                 hid_noise=params['hid_noise'],
-                                 bidirectional=params['bidirectional'])
-        model = LSTMModel(lstm_params)
-        return model
+class LSTMGridSearch(GridSearch):
+    def train_model(self, model: nn.Module):
+        trainer = LSTMTrainer(model, self.trainer_options, self.logger)
+        trainer.train_loop(self.train_dataset, self.valid_dataset, self.test_dataset)
+
+    def create_model(self, params: dict) -> nn.Module:
+        lstm_params = LSTMParams(**params)
+        return LSTMModel(lstm_params)

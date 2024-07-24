@@ -1,4 +1,2 @@
-__all__ = ['datasets', 'Grid', 'Trainer', 'LSTMTrainer', 'TrainerOptions', 'grid_search', 'GridSearchOptions']
+__all__ = ['datasets', 'grid_search', 'trainer', 'utils', 'Grid']
 from .permutation_grid import Grid
-from .grid_search import grid_search, GridSearchOptions
-from .trainer import Trainer, TrainerOptions, LSTMTrainer

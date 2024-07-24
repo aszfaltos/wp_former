@@ -169,7 +169,6 @@ class LSTMTrainer(Trainer):
         mse = nn.MSELoss()
         mae = nn.L1Loss()
         mse_loss = 0.0
-        rmse_loss = 0.0
         mae_loss = 0.0
 
         with torch.no_grad():
@@ -178,10 +177,9 @@ class LSTMTrainer(Trainer):
 
                 loss = mse(output, tgt_data)
                 mse_loss += float(loss.item()) / len(data_loader)
-                rmse_loss += math.sqrt(float(loss.item())) / len(data_loader)
                 mae_loss += float(mae(output, tgt_data).item()) / len(data_loader)
 
-        return mse_loss, rmse_loss, mae_loss
+        return mse_loss, math.sqrt(mse_loss), mae_loss
 
     def _inference_step(self, src_data, gen_len):
         inp = src_data

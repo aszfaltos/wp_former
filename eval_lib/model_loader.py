@@ -22,6 +22,7 @@ def load_model(test: str, name: str, epoch: int, model_type, path: str = 'traine
 
 
 def model_from_params(params: dict, model_type) -> nn.Module:
+    params['kind'] = 'lstm'
     print(params['kind'])
     if params['kind'] == 'transformer':
         transformer_params = TransformerParams(
