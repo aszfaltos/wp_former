@@ -144,7 +144,7 @@ def train_lstm(training_data, logger):
     )
 
     grid_search_opts = GridSearchOptions(
-        root_save_path='./trained/lstm_dropout/',
+        root_save_path='./trained/lstm_wavelet/',
         valid_split=0.2,
         test_split=0.2,
         window_step_size=4,
@@ -160,15 +160,15 @@ def train_lstm(training_data, logger):
         tgt_sequence_length=1,
         step_size=4,
         add_start_token=False,
-        preprocess_y=False
+        preprocess_y=True
     )
-    dataset = TimeSeriesWindowedTensorDataset(training_data, dataset_config)
+    dataset = TimeSeriesWindowedTensorDataset(training_data, dataset_config, wavelet.WaveletPreprocessor(3, 'haar', 4))
 
     params = {
-        'in_features': [3],
+        'in_features': [15],
         'hidden_size': [64],
         'num_layers': [2],
-        'out_features': [3],
+        'out_features': [15],
         'dropout': [.03],
         'in_noise': [.0],
         'hid_noise': [.01],
