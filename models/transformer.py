@@ -4,6 +4,10 @@ import math
 from dataclasses import dataclass
 
 
+DEVICE = torch.device(
+    'cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, num_heads):
         super(MultiHeadAttention, self).__init__()
@@ -164,7 +168,7 @@ class Transformer(nn.Module):
         tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
         tgt_len = tgt.size(1)
         nopeak_mask = (
-            1 - torch.triu(torch.ones(1, tgt_len, tgt_len), diagonal=1)
+            1 - torch.triu(torch.ones(1, tgt_len, tgt_len), diagonal=1).to(DEVICE)
         ).bool()
         tgt_mask = tgt_mask & nopeak_mask
         return src_mask, tgt_mask

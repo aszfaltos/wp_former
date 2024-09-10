@@ -8,7 +8,7 @@ from torch import nn
 from utils import Logger
 from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
 from .permutation_grid import Grid
-from .trainer import LSTMTrainer, TrainerOptions
+from .trainer import LSTMTrainer, TrainerOptions, TransformerTrainer
 from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams
 import numpy as np
 from signal_decomposition.preprocessor import Preprocessor
@@ -20,10 +20,7 @@ class GridSearchOptions:
     root_save_path: str
     valid_split: float
     test_split: float
-    window_step_size: int
     random_seed: int
-    use_start_token: bool
-    preprocess_y: bool
 
 
 class GridSearch(ABC):
@@ -78,3 +75,13 @@ class LSTMGridSearch(GridSearch):
     def create_model(self, params: dict) -> nn.Module:
         lstm_params = LSTMParams(**params)
         return LSTMModel(lstm_params)
+
+
+class TransformerGridSearch(GridSearch):
+    def train_model(self, model: nn.Module):
+        trainer = TransformerTrainer(model, self.trainer_options, self.logger)
+        trainer.train_loop(self.train_dataset, self.valid_dataset, self.test_dataset)
+
+    def create_model(self, params: dict) -> nn.Module:
+        transformer_params = TransformerParams(**params)
+        return Transformer(transformer_params)

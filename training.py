@@ -4,7 +4,7 @@ import torch
 from data_handling import data_loader
 from trainer_lib.datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
 from trainer_lib.trainer import TrainerOptions
-from trainer_lib.grid_search import GridSearchOptions, LSTMGridSearch
+from trainer_lib.grid_search import GridSearchOptions, LSTMGridSearch, TransformerGridSearch
 from trainer_lib import Grid
 import utils
 from signal_decomposition import eemd, wavelet
@@ -147,10 +147,7 @@ def train_lstm(training_data, logger):
         root_save_path='./trained/lstm_wavelet/',
         valid_split=0.2,
         test_split=0.2,
-        window_step_size=4,
         random_seed=42,
-        use_start_token=False,
-        preprocess_y=False
     )
 
     dataset_config = TimeSeriesWindowedDatasetConfig(
@@ -180,6 +177,54 @@ def train_lstm(training_data, logger):
     grid_search.search(grid)
 
 
+def train_transformer(training_data, logger):
+    training_opts = TrainerOptions(
+        batch_size=1024,
+        epochs=600,
+        learning_rate=1e-3,
+        learning_rate_decay=.999,
+        weight_decay=1e-5,
+        gradient_accumulation_steps=2,
+        early_stopping_patience=30,
+        early_stopping_min_delta=0.01,
+        save_every_n_epochs=5,
+        save_path=''
+    )
+
+    grid_search_opts = GridSearchOptions(
+        root_save_path='./trained/transformer_wavelet/',
+        valid_split=0.2,
+        test_split=0.2,
+        random_seed=42,
+    )
+
+    dataset_config = TimeSeriesWindowedDatasetConfig(
+        src_window_size=1,
+        tgt_window_size=1,
+        src_sequence_length=24,
+        tgt_sequence_length=1,
+        step_size=4,
+        add_start_token=True,
+        preprocess_y=True
+    )
+    dataset = TimeSeriesWindowedTensorDataset(training_data, dataset_config, wavelet.WaveletPreprocessor(3, 'haar', 4))
+
+    params = {
+        "src_size": [15],
+        "tgt_size": [15],
+        "d_model": [64],
+        "num_heads": [2, 4],
+        "num_layers": [2, 4],
+        "d_ff": [128, 256],
+        "max_seq_length": [24],
+        "dropout": [.01, .03, .1]
+    }
+    grid = Grid(params)
+
+    grid_search = TransformerGridSearch(dataset, training_opts, grid_search_opts, logger)
+    grid_search.search(grid)
+
+
 def main():
     logger = utils.Logger('trainer')
 
@@ -189,7 +234,7 @@ def main():
 
     logger.info('Data loaded.')
 
-    train_lstm(sample, logger)
+    train_transformer(sample, logger)
 
 
 if __name__ == '__main__':

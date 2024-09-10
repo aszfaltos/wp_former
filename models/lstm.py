@@ -3,6 +3,10 @@ import torch
 from dataclasses import dataclass
 
 
+DEVICE = torch.device(
+    'cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
 @dataclass
 class LSTMParams:
     in_features: int
@@ -56,8 +60,8 @@ class LSTMModel(nn.Module):
     def forward(self, x):
         x = self.in_noise(x)
         batch_size = x.shape[0]
-        h_0 = torch.zeros(self.h_n_dim * self.num_layers, batch_size, self.hidden_size).to('cuda')
-        c_0 = torch.zeros(self.h_n_dim * self.num_layers, batch_size, self.hidden_size).to('cuda')
+        h_0 = torch.zeros(self.h_n_dim * self.num_layers, batch_size, self.hidden_size).to(DEVICE)
+        c_0 = torch.zeros(self.h_n_dim * self.num_layers, batch_size, self.hidden_size).to(DEVICE)
 
         output, (h_n, c_n) = self.lstm(x, (h_0, c_0))
         h_n = torch.permute(h_n, (1, 0, 2))
