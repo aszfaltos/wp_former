@@ -11,3 +11,4 @@ temp_data/
 */.mypy_cache/
 */.coverage
 logs/
+tmp_data/

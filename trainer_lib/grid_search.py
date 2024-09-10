@@ -1,5 +1,5 @@
 import os.path
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import json
 
 from numpy import ndarray
@@ -31,6 +31,11 @@ class GridSearch(ABC):
                  logger: Logger | None = None):
         self.trainer_options = trainer_options
         self.opts = search_options
+        with open(os.path.join(self.opts.root_save_path, 'trainer_opts.json'), "w") as fp:
+            json.dump(asdict(self.trainer_options), fp)
+        with open(os.path.join(self.opts.root_save_path, 'grid_opts.json'), "w") as fp:
+            json.dump(asdict(self.opts), fp)
+
         if logger is None:
             logger = Logger('grid_search')
         self.logger = logger
