@@ -1,24 +1,9 @@
 import os
 import json
 from torch import nn
-import torch
-from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMParams
+from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMParams, LSTMModel
 from trainer_lib.utils import resume
 
-
-def load_model(test: str, name: str, epoch: int, model_type, path: str = 'trained'):
-    path = os.path.join(path, test, name)
-    with open(os.path.join(path, 'params.json'), 'r') as fp:
-        params = json.load(fp)
-
-    model = model_from_params(params, model_type)
-    resume(model, os.path.join(path, f'{epoch}.pth'))
-    model.eval()
-
-    with open(os.path.join(path, f'{epoch}.json'), 'r') as fp:
-        metrics = json.load(fp)
-
-    return params, model, metrics
 
 
 def model_from_params(params: dict, model_type) -> nn.Module:
@@ -68,3 +53,46 @@ def model_from_params(params: dict, model_type) -> nn.Module:
 
         model = model_type(lstm_params)
         return model
+
+
+def load_model(path: str, epoch: int, load_fn):
+    with open(os.path.join(path, 'params.json'), 'r') as fp:
+        params = json.load(fp)
+
+    model = load_lstm(params)
+    resume(model, os.path.join(path, f'{epoch}.pth'))
+    model.eval()
+
+    with open(os.path.join(path, f'{epoch}.json'), 'r') as fp:
+        metrics = json.load(fp)
+
+    return params, model, metrics
+
+
+def load_lstm(params):
+    lstm_params = LSTMParams(
+        in_features=params['in_features'],
+        hidden_size=params['hidden_size'],
+        num_layers=params['num_layers'],
+        out_features=params['out_features'],
+        dropout=params['dropout'],
+        in_noise=params['in_noise'],
+        hid_noise=params['hid_noise'],
+        bidirectional=params['bidirectional']
+    )
+    return LSTMModel(lstm_params)
+
+
+def load_transformer(params):
+    transformer_params = TransformerParams(
+        src_size=params['src_size'],
+        tgt_size=params['tgt_size'],
+        d_model=params['d_model'],
+        num_heads=params['num_heads'],
+        num_layers=params['num_layers'],
+        d_ff=params['d_ff'],
+        max_seq_length=params['max_seq_length'],
+        dropout=params['dropout']
+    )
+
+    return Transformer(transformer_params)
