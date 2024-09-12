@@ -81,6 +81,9 @@ class TimeSeriesWindowedTensorDataset(TensorDataset):
     def get_sequence_from_x_windows(self, window_sequence: Tensor):
         return window_sequence.reshape(self.sl_x * self.ws_x, self.vec_size_x)
 
+    def reconstruct_preprocessed_sequence(self, preprocessed_sequence):
+        return self.preprocessor.reconstruct(preprocessed_sequence)
+
     def __len__(self):
         return self.x.shape[0]
 
