@@ -65,38 +65,35 @@ class Evaluator:
             bold = 'font-weight: bold'
             default = ''
 
-            min_in_col = col.min()
+            min_in_col = col[0].min()
             return [bold if v == min_in_col else default for v in col]
 
-        d = {'mse': {'mean': [], 'std': []},
-             'rmse': {'mean': [], 'std': []},
-             'mae': {'mean': [], 'std': []}}
+        d = {'mse': [],
+             'rmse': [],
+             'mae': []}
 
         for key in self.list_models():
             mse = np.array([metric['test']['MSE'][-1] for metric in self.metrics[key]])
             rmse = np.array([metric['test']['RMSE'][-1] for metric in self.metrics[key]])
             mae = np.array([metric['test']['MAE'][-1] for metric in self.metrics[key]])
 
-            d['mse']['mean'].append(mse.mean())
-            d['mse']['std'].append(mse.std())
-            d['rmse']['mean'].append(rmse.mean())
-            d['rmse']['std'].append(rmse.std())
-            d['mae']['mean'].append(mae.mean())
-            d['mae']['std'].append(mae.std())
+            d['mse'].append((mse.mean(), mse.std()))
+            d['rmse'].append((rmse.mean(), rmse.std()))
+            d['mae'].append((mae.mean(), mae.std()))
 
         df = pd.DataFrame(data=d, index=[key for key in self.list_models()])
         df = df.style.apply(bold_min, axis=0)
+        df = df.apply(lambda row: f'{row[0]} +- {row[1]}', axis=1)
 
         return df
 
     def plot_learning_curves(self, start: int, end: int, eval_steps: int):
         for key in self.list_models():
-            print(len(self.metrics[key]['train']['MSE']))
-            print(len(self.metrics[key]['eval']['MSE']))
             plt.title(f'{key} - learning curve')
-            plt.plot(list(range(start, end)), self.metrics[key]['train']['MSE'][start:end], label='train')
-            plt.plot(np.arange(max(start, 5), min(end, len(self.metrics[key]['train']['MSE'])), eval_steps),
-                     self.metrics[key]['eval']['MSE'][start//eval_steps:end//eval_steps], label='eval')
+            for idx, metric in enumerate(self.metrics[key]):
+                plt.plot(list(range(start, end)), metric['train']['MSE'][start:end], label=f'{idx} - train')
+                plt.plot(np.arange(max(start, 5), min(end, len(self.metrics[key]['train']['MSE'])), eval_steps),
+                         metric['eval']['MSE'][start//eval_steps:end//eval_steps], label=f'{idx} - eval')
             plt.legend()
             plt.show()
 
