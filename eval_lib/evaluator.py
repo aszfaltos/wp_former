@@ -5,6 +5,7 @@ from .model_loader import load_model
 from trainer_lib.datasets import TimeSeriesWindowedTensorDataset
 import pandas as pd
 from typing import Callable, Tuple
+from matplotlib import pyplot as plt
 import numpy as np
 
 
@@ -51,7 +52,6 @@ class Evaluator:
 
         return gt, f
 
-
     def generate_rolling_forecasts(self, dataset: TimeSeriesWindowedTensorDataset, pred_len):
         forecasts = []
 
@@ -85,7 +85,21 @@ class Evaluator:
             d['mae']['std'].append(mae.std())
 
         df = pd.DataFrame(data=d, index=[key for key in self.list_models()])
-        df.style.apply(bold_min, axis=0)
+        df = df.style.apply(bold_min, axis=0)
+
+        return df
+
+    def plot_learning_curves(self, start: int, end: int, eval_steps: int):
+        for key in self.list_models():
+            print(len(self.metrics[key]['train']['MSE']))
+            print(len(self.metrics[key]['eval']['MSE']))
+            plt.title(f'{key} - learning curve')
+            plt.plot(list(range(start, end)), self.metrics[key]['train']['MSE'][start:end], label='train')
+            plt.plot(np.arange(max(start, 5), min(end, len(self.metrics[key]['train']['MSE'])), eval_steps),
+                     self.metrics[key]['eval']['MSE'][start//eval_steps:end//eval_steps], label='eval')
+            plt.legend()
+            plt.show()
+
 
     @staticmethod
     def _lstm_forecast(model: LSTMModel, dataset: TimeSeriesWindowedTensorDataset, pred_len: int):
@@ -104,7 +118,6 @@ class Evaluator:
                 gt.append(dataset.get_sequence_from_y_windows(tgt).to('cpu'))
 
         return gt, p
-
 
     @staticmethod
     def _transformer_forecast(model: Transformer, dataset: TimeSeriesWindowedTensorDataset, pred_len: int):

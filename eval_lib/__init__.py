@@ -1,2 +1,2 @@
-__all__ = ['load_model']
-from .model_loader import load_model
+__all__ = ['model_loader', 'Evaluator']
+from .evaluator import Evaluator

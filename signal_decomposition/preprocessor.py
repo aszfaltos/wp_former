@@ -8,7 +8,14 @@ class Preprocessor(ABC):
     def process(self, x: ndarray) -> ndarray:
         pass
 
+    @abstractmethod
+    def reconstruct(self, x: ndarray) -> ndarray:
+        pass
+
 
 class SimplePreprocessor(Preprocessor):
     def process(self, x: ndarray) -> ndarray:
         return np.array(x[:, np.newaxis, :], dtype=np.float32)
+
+    def reconstruct(self, x: ndarray) -> ndarray:
+        return x

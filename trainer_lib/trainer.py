@@ -2,7 +2,7 @@ import math
 import os.path
 import json
 from dataclasses import dataclass
-import datetime
+from typing import Callable
 import time
 
 import torch
@@ -36,12 +36,14 @@ class TrainerOptions:
 
 
 class Trainer(ABC):
-    def __init__(self, model: torch.nn.Module, opts: TrainerOptions, logger: Logger):
+    def __init__(self, model: torch.nn.Module, opts: TrainerOptions, logger: Logger,
+                 post_processor: Callable = lambda x: x):
         self.model = model.to(DEVICE)
         self.opts = opts
         self.metrics = {'train': {'MSE': []},
                         'eval': {'MSE': [], 'RMSE': [], 'MAE': []},
                         'test': {'MSE': [], 'RMSE': [], 'MAE': []}}
+        self.post_processor = post_processor
         self.logger = logger
 
         self.early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
@@ -111,7 +113,7 @@ class Trainer(ABC):
         self.early_stopper.step(mse_loss)
 
     def test(self, test_loader):
-        mse_loss, rmse_loss, mae_loss = self._eval(test_loader)
+        mse_loss, rmse_loss, mae_loss = self._eval(test_loader, test=True)
 
         self.metrics['test']['MSE'].append(mse_loss)
         self.metrics['test']['RMSE'].append(rmse_loss)
@@ -121,7 +123,7 @@ class Trainer(ABC):
                          f' MAE: {round(mae_loss, 6)},')
 
     @abstractmethod
-    def _eval(self, data_loader):
+    def _eval(self, data_loader, test: bool = False):
         pass
 
     def _save_checkpoint(self, epoch):
@@ -159,7 +161,7 @@ class LSTMTrainer(Trainer):
         self.metrics['train']['MSE'].append(train_loss)
         self.logger.debug(f'Train - MSE: {train_loss}.')
 
-    def _eval(self, data_loader):
+    def _eval(self, data_loader, test: bool = False):
         self.model.eval()
 
         mse = nn.MSELoss()
@@ -170,6 +172,9 @@ class LSTMTrainer(Trainer):
         with torch.no_grad():
             for src_data, tgt_data in data_loader:
                 output = self._inference_step(src_data, tgt_data.shape[1])
+
+                if test:
+                    output, tgt_data = self.post_processor(output), self.post_processor(tgt_data)
 
                 loss = mse(output, tgt_data)
                 mse_loss += float(loss.item()) / len(data_loader)
@@ -207,7 +212,7 @@ class TransformerTrainer(Trainer):
         self.metrics['train']['MSE'].append(train_loss)
         self.logger.debug(f'Train - MSE: {train_loss}.')
 
-    def _eval(self, data_loader):
+    def _eval(self, data_loader, test: bool = False):
         self.model.eval()
 
         mse = nn.MSELoss()
@@ -219,8 +224,11 @@ class TransformerTrainer(Trainer):
             for src_data, tgt_data in data_loader:
                 output = self.model(src_data, tgt_data[:, :-1])
 
-                loss = mse(output, tgt_data[:, 1:])
+                if test:
+                    output, tgt_data = self.post_processor(output), self.post_processor(tgt_data[:, 1:])
+
+                loss = mse(output, tgt_data)
                 mse_loss += float(loss.item()) / len(data_loader)
-                mae_loss += float(mae(output, tgt_data[:, 1:]).item()) / len(data_loader)
+                mae_loss += float(mae(output, tgt_data).item()) / len(data_loader)
 
         return mse_loss, math.sqrt(mse_loss), mae_loss

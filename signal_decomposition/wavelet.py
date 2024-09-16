@@ -11,13 +11,13 @@ class WaveletPreprocessor(Preprocessor):
         self._decomposition_lvl = decomposition_lvl
         self._wavelet = wavelet
 
-    def reconstruct(self, coefs: list[ndarray], wavelet: str):
+    def reconstruct_modwt(self, coefs: list[ndarray], wavelet: str):
         features = []
         for i in range(0, self.features, self._decomposition_lvl):
             features.append(imodwt(coefs[i:i+self._decomposition_lvl], wavelet))
         return features
 
-    def reconstruct_mra(self, coefs: np.ndarray):
+    def reconstruct(self, coefs: np.ndarray):
         features = []
         for i in range(0, self.features, self._decomposition_lvl):
             features.append(coefs[i:i + self._decomposition_lvl].sum(-1))
