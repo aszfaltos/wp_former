@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 
 @dataclass
 class GridSearchOptions:
+    run_nums: int
     root_save_path: str
     valid_split: float
     test_split: float
@@ -53,15 +54,17 @@ class GridSearch(ABC):
 
     def search(self, grid: Grid):
         for idx, params in enumerate(grid):
-            model = self.create_model(dict(params))
-            self.logger.info(f"Training model {idx + 1}/{len(grid)} with params: {params}")
+            for n in range(self.opts.run_nums):
+                model = self.create_model(dict(params))
+                self.logger.info(f"Training model {idx + 1}/{len(grid)} with params: {params}")
 
-            self.trainer_options.save_path = os.path.join(os.path.abspath(self.opts.root_save_path), str(idx))
-            os.makedirs(self.trainer_options.save_path, exist_ok=True)
-            with open(os.path.join(self.trainer_options.save_path, 'params.json'), "w") as fp:
-                json.dump(params, fp)
+                self.trainer_options.save_path = os.path.join(os.path.abspath(self.opts.root_save_path),
+                                                                              str(idx), str(n))
+                os.makedirs(self.trainer_options.save_path, exist_ok=True)
+                with open(os.path.join(self.trainer_options.save_path, 'params.json'), "w") as fp:
+                    json.dump(params, fp)
 
-            self.train_model(model)
+                self.train_model(model)
 
     @abstractmethod
     def train_model(self, model: nn.Module):

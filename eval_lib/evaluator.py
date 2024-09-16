@@ -5,6 +5,7 @@ from .model_loader import load_model
 from trainer_lib.datasets import TimeSeriesWindowedTensorDataset
 import pandas as pd
 from typing import Callable, Tuple
+import numpy as np
 
 
 class Evaluator:
@@ -15,8 +16,10 @@ class Evaluator:
 
     def add_model(self, path: str, epoch: int, load_fn: Callable, key: str) -> dict:
         params, model, metrics = load_model(path, epoch, load_fn)
-        self.metrics[key] = metrics
-        self.models[key] = model
+        if key in self.metrics.keys() or key in self.models.keys():
+            self.metrics[key], self.models[key] = [], []
+        self.metrics[key].append(metrics)
+        self.models[key].append(model)
         return params
 
     def rename_model(self, key: str, new_key: str):
@@ -37,7 +40,7 @@ class Evaluator:
         return list(self.models.keys())
 
     def generate_rolling_forecast(self, key: str, dataset: TimeSeriesWindowedTensorDataset, pred_len: int) -> Tuple[list, list]:
-        model = self.models[key]
+        model = self.models[key][0]
 
         gt, f = [], []
 
@@ -65,9 +68,22 @@ class Evaluator:
             min_in_col = col.min()
             return [bold if v == min_in_col else default for v in col]
 
-        d = {'mse': [self.metrics[key]['test']['MSE'][-1] for key in self.list_models()],
-             'rmse': [self.metrics[key]['test']['RMSE'][-1] for key in self.list_models()],
-             'mae': [self.metrics[key]['test']['MAE'][-1] for key in self.list_models()]}
+        d = {'mse': {'mean': [], 'std': []},
+             'rmse': {'mean': [], 'std': []},
+             'mae': {'mean': [], 'std': []}}
+
+        for key in self.list_models():
+            mse = np.array([metric['test']['MSE'][-1] for metric in self.metrics[key]])
+            rmse = np.array([metric['test']['RMSE'][-1] for metric in self.metrics[key]])
+            mae = np.array([metric['test']['MAE'][-1] for metric in self.metrics[key]])
+
+            d['mse']['mean'].append(mse.mean())
+            d['mse']['std'].append(mse.std())
+            d['rmse']['mean'].append(rmse.mean())
+            d['rmse']['std'].append(rmse.std())
+            d['mae']['mean'].append(mae.mean())
+            d['mae']['std'].append(mae.std())
+
         df = pd.DataFrame(data=d, index=[key for key in self.list_models()])
         df.style.apply(bold_min, axis=0)
 

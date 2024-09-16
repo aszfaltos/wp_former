@@ -145,6 +145,7 @@ def train_lstm(training_data, logger):
 
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/lstm_wavelet/',
+        run_nums=5,
         valid_split=0.2,
         test_split=0.2,
         random_seed=42,
@@ -193,6 +194,7 @@ def train_transformer(training_data, logger):
 
     grid_search_opts = GridSearchOptions(
         root_save_path='./trained/transformer_wavelet/',
+        run_nums=5,
         valid_split=0.2,
         test_split=0.2,
         random_seed=42,
