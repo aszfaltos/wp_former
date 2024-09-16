@@ -126,12 +126,12 @@ class TimeSeriesInvertedTensorDataset(TimeSeriesTensorDataset):
 
             self.vec_size_x = next_x.shape[-1]
             x_seqs.append(next_x.reshape(self.sl_x, self.ws_x, self.vec_size_x)
-                                .transpose((1, 2))
+                                .transpose(0, 2, 1)
                                 .reshape(self.sl_x * self.vec_size_x, self.ws_x))
 
             self.vec_size_y = next_y.shape[-1]
             vec = (next_y.reshape(self.sl_y, self.ws_y, self.vec_size_y)
-                         .transpose((1, 2))
+                         .transpose(0, 2, 1)
                          .reshape(self.sl_y * self.vec_size_y, self.ws_y))
 
             if self.add_start_token:
@@ -143,10 +143,10 @@ class TimeSeriesInvertedTensorDataset(TimeSeriesTensorDataset):
 
     def get_sequence_from_y_windows(self, window_sequence: Tensor):
         return (window_sequence.reshape(self.sl_y, self.vec_size_y, self.ws_y)
-                               .transpose((1, 2))
+                               .transpose(1, 2)
                                .reshape(self.sl_y * self.ws_y, self.vec_size_y))
 
     def get_sequence_from_x_windows(self, window_sequence: Tensor):
         return (window_sequence.reshape(self.sl_x, self.vec_size_x, self.ws_x)
-                               .transpose((1, 2))
+                               .transpose(1, 2)
                                .reshape(self.sl_x * self.ws_x, self.vec_size_x))
