@@ -64,7 +64,5 @@ class LSTMModel(nn.Module):
         c_0 = torch.zeros(self.h_n_dim * self.num_layers, batch_size, self.hidden_size).to(DEVICE)
 
         output, (h_n, c_n) = self.lstm(x, (h_0, c_0))
-        h_n = torch.permute(h_n, (1, 0, 2))
-        # From shape [h_n_dim, batch, hidden_size] -> [batch, h_n_dim, hidden_size]
-        # flatten and fully connected layer expects batch to be the first dimension
+        h_n = torch.transpose(h_n, 0, 1)
         return self.fc(h_n)

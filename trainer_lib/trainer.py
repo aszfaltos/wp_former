@@ -232,3 +232,15 @@ class TransformerTrainer(Trainer):
                 mae_loss += float(mae(output, tgt_data).item()) / len(data_loader)
 
         return mse_loss, math.sqrt(mse_loss), mae_loss
+
+
+class VPLSTMTrainer(LSTMTrainer):
+    def _inference_step(self, src_data, gen_len):
+        inp = src_data
+        for i in range(gen_len):
+            if i == 0:
+                out = self.model(inp, True)
+            else:
+                out = self.model(inp)
+            inp = torch.cat((inp, out.unsqueeze(-2)), dim=1)
+        return inp[:, -gen_len:]

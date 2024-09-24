@@ -2,16 +2,14 @@ import os.path
 from dataclasses import dataclass, asdict
 import json
 
-from numpy import ndarray
 from torch import nn
 
 from utils import Logger
-from .datasets import TimeSeriesWindowedTensorDataset, TimeSeriesWindowedDatasetConfig
+from .datasets import TimeSeriesWindowedTensorDataset
 from .permutation_grid import Grid
-from .trainer import LSTMTrainer, TrainerOptions, TransformerTrainer
-from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams
+from .trainer import LSTMTrainer, TrainerOptions, TransformerTrainer, VPLSTMTrainer
+from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams, VPLSTMModel, VPLSTMParams
 import numpy as np
-from signal_decomposition.preprocessor import Preprocessor
 from abc import ABC, abstractmethod
 
 
@@ -93,3 +91,23 @@ class TransformerGridSearch(GridSearch):
     def create_model(self, params: dict) -> nn.Module:
         transformer_params = TransformerParams(**params)
         return Transformer(transformer_params)
+
+
+class VPLSTMGridSearch(GridSearch):
+    def train_model(self, model: nn.Module):
+        trainer = VPLSTMTrainer(model, self.trainer_options, self.logger)
+        trainer.train_loop(self.train_dataset, self.valid_dataset, self.test_dataset)
+
+    def create_model(self, params: dict) -> nn.Module:
+        vp_lstm_params = VPLSTMParams(**params)
+        return VPLSTMModel(vp_lstm_params)
+
+
+class VPTransformerGridSearch(GridSearch):
+    def train_model(self, model: nn.Module):
+        trainer = TransformerTrainer(model, self.trainer_options, self.logger)
+        trainer.train_loop(self.train_dataset, self.valid_dataset, self.test_dataset)
+
+    def create_model(self, params: dict) -> nn.Module:
+        vp_transformer_params = VPTransformerParams(**params)
+        return VPTransformer(vp_transformer_params)
