@@ -234,6 +234,57 @@ class TransformerTrainer(Trainer):
         return mse_loss, math.sqrt(mse_loss), mae_loss
 
 
+class TimeTokenTransformerTrainer(Trainer):
+    def __init__(self, model: torch.nn.Module, opts: TrainerOptions, vec_size_y: int, logger: Logger,
+                 post_processor: Callable = lambda x: x):
+        super(TimeTokenTransformerTrainer, self).__init__(model, opts, logger, post_processor)
+
+        self.vec_size_y = vec_size_y
+
+    def train(self, train_loader):
+        self.model.train()
+
+        mse = nn.MSELoss()
+        train_loss = 0.0
+
+        for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
+            # shifting with one whole space token
+            output = self.model(src_data, tgt_data[:, :-self.vec_size_y])
+
+            loss = mse(output, tgt_data[:, self.vec_size_y:])
+            train_loss += float(loss.item()) / len(train_loader)
+            loss = loss / self.opts.gradient_accumulation_steps
+            loss.backward()
+
+            if ((batch_idx + 1) % self.opts.gradient_accumulation_steps == 0) or (batch_idx + 1 == len(train_loader)):
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+
+        self.metrics['train']['MSE'].append(train_loss)
+        self.logger.debug(f'Train - MSE: {train_loss}.')
+
+    def _eval(self, data_loader, test: bool = False):
+        self.model.eval()
+
+        mse = nn.MSELoss()
+        mae = nn.L1Loss()
+        mse_loss = 0.0
+        mae_loss = 0.0
+
+        with torch.no_grad():
+            for src_data, tgt_data in data_loader:
+                output = self.model(src_data, tgt_data[:, :-self.vec_size_y])
+
+                if test:
+                    output, tgt_data = self.post_processor(output), self.post_processor(tgt_data[:, self.vec_size_y:])
+
+                loss = mse(output, tgt_data)
+                mse_loss += float(loss.item()) / len(data_loader)
+                mae_loss += float(mae(output, tgt_data).item()) / len(data_loader)
+
+        return mse_loss, math.sqrt(mse_loss), mae_loss
+
+
 class VPLSTMTrainer(LSTMTrainer):
     def _inference_step(self, src_data, gen_len):
         inp = src_data

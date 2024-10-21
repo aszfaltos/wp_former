@@ -135,7 +135,7 @@ class TimeSeriesInvertedTensorDataset(TimeSeriesTensorDataset):
                          .reshape(self.sl_y * self.vec_size_y, self.ws_y))
 
             if self.add_start_token:
-                y_seqs.append(np.concatenate([np.ones((1, self.ws_y)), vec], axis=0))
+                y_seqs.append(np.concatenate([np.ones((self.vec_size_y, self.ws_y)), vec], axis=0))
             else:
                 y_seqs.append(vec)
 

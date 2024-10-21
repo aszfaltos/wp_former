@@ -7,7 +7,7 @@ from torch import nn
 from utils import Logger
 from .datasets import TimeSeriesWindowedTensorDataset
 from .permutation_grid import Grid
-from .trainer import LSTMTrainer, TrainerOptions, TransformerTrainer, VPLSTMTrainer
+from .trainer import LSTMTrainer, TrainerOptions, TransformerTrainer, VPLSTMTrainer, TimeTokenTransformerTrainer
 from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMModel, LSTMParams, VPLSTMModel, VPLSTMParams
 import numpy as np
 from abc import ABC, abstractmethod
@@ -86,6 +86,25 @@ class LSTMGridSearch(GridSearch):
 class TransformerGridSearch(GridSearch):
     def train_model(self, model: nn.Module):
         trainer = TransformerTrainer(model, self.trainer_options, self.logger)
+        trainer.train_loop(self.train_dataset, self.valid_dataset, self.test_dataset)
+
+    def create_model(self, params: dict) -> nn.Module:
+        transformer_params = TransformerParams(**params)
+        return Transformer(transformer_params)
+
+
+class TimeTokenTransformerGridSearch(GridSearch):
+    def __init__(self,
+                 dataset: TimeSeriesWindowedTensorDataset,
+                 trainer_options: TrainerOptions,
+                 search_options: GridSearchOptions,
+                 logger: Logger | None = None):
+        super(TimeTokenTransformerGridSearch, self).__init__(dataset, trainer_options, search_options, logger)
+
+        self.vec_size_y = dataset.vec_size_y
+
+    def train_model(self, model: nn.Module):
+        trainer = TimeTokenTransformerTrainer(model, self.trainer_options, self.vec_size_y, self.logger)
         trainer.train_loop(self.train_dataset, self.valid_dataset, self.test_dataset)
 
     def create_model(self, params: dict) -> nn.Module:
