@@ -48,15 +48,15 @@ class TimeSeriesTensorDataset(TensorDataset, ABC):
         self.y = self.tensors[1].to(DEVICE)
 
     @abstractmethod
-    def _create_sequences(self, data: ndarray) -> (ndarray, ndarray):
+    def _create_sequences(self, data: ndarray) -> tuple[ndarray, ndarray]:
         pass
 
     @abstractmethod
-    def get_sequence_from_y_windows(self, window_sequence: Tensor):
+    def get_sequence_from_y_windows(self, window_sequence: Tensor) -> Tensor:
         pass
 
     @abstractmethod
-    def get_sequence_from_x_windows(self, window_sequence: Tensor):
+    def get_sequence_from_x_windows(self, window_sequence: Tensor) -> Tensor:
         pass
 
     def reconstruct_preprocessed_sequence(self, preprocessed_sequence):
@@ -65,15 +65,15 @@ class TimeSeriesTensorDataset(TensorDataset, ABC):
     def __len__(self):
         return self.x.shape[0]
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx): # type: ignore
         if type(idx) is int:
             return self.x[idx], self.y[idx]
         else:
-            return list(zip(self.x[idx], self.y[idx]))
+            return tuple(zip(self.x[idx], self.y[idx]))
 
 
 class TimeSeriesWindowedTensorDataset(TimeSeriesTensorDataset):
-    def _create_sequences(self, data: ndarray) -> (ndarray, ndarray):
+    def _create_sequences(self, data: ndarray):
         x_seqs = []
         y_seqs = []
         for i in range(0, data.shape[0] - (self.ws_x * self.sl_x + self.ws_y * self.sl_y), self.step_size):
@@ -110,7 +110,7 @@ class TimeSeriesWindowedTensorDataset(TimeSeriesTensorDataset):
 
 
 class TimeSeriesInvertedTensorDataset(TimeSeriesTensorDataset):
-    def _create_sequences(self, data: ndarray) -> (ndarray, ndarray):
+    def _create_sequences(self, data: ndarray):
         x_seqs = []
         y_seqs = []
         for i in range(0, data.shape[0] - (self.ws_x * self.sl_x + self.ws_y * self.sl_y), self.step_size):

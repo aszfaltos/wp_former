@@ -76,7 +76,11 @@ def load_omsz_data(path: str, regions: list[str] | None = None, logger=None):
     logger.debug(f'Combining {len(columns)} columns...')
     for key, value in columns.items():
         df = pd.DataFrame(index=time_column)
-        df = pd.concat([df, *value], axis=1)
+        cleared_values = []
+        for i in range(len(value)):
+            if len(value[i].index) == len(value[i].index.unique()):
+                cleared_values.append(value[i])
+        df = pd.concat([df, *cleared_values], axis=1)
         logger.debug(f'Combining {key}: {df.count(axis=1).max()} stations had data for this column.')
         combined[key] = df.mean(axis=1, skipna=True)
         combined[key] = combined[key].interpolate(method='linear', axis=0).ffill().bfill()

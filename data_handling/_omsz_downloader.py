@@ -42,8 +42,11 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int, log
         logger = Logger(__name__)
 
     load_dotenv(find_dotenv())
+    temp_path = os.getenv('TEMP_DATA_PATH')
+    temp_path = temp_path if temp_path else ''
 
-    atexit.register(exiting, logger, os.getenv('TEMP_DATA_PATH'))
+    atexit.register(exiting, logger, temp_path)
+    
 
     if period == 10:
         period_type = PeriodType.MIN
@@ -55,11 +58,12 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int, log
 
     if not os.path.exists(path):
         os.makedirs(path)
-    if not os.path.exists(os.getenv('TEMP_DATA_PATH')):
-        os.makedirs(os.getenv('TEMP_DATA_PATH'))
+    if not os.path.exists(temp_path):
+        os.makedirs(temp_path)
 
-    meta_data = download_meta_data(os.getenv('TEMP_DATA_PATH'), period_type, logger)
-    meta_data.to_csv(os.path.join(path, OMSZData.meta_data_file), sep=',')
+    meta_data = download_meta_data(temp_path, period_type, logger)
+    if meta_data is not None:
+        meta_data.to_csv(os.path.join(path, OMSZData.meta_data_file), sep=',')
 
     omsz_historical_url = urlparse.urljoin(OMSZData.base_url, f'{period_type.value}/{OMSZData.historical_url}')
     omsz_recent_url = urlparse.urljoin(OMSZData.base_url, f'{period_type.value}/{OMSZData.recent_url}')
@@ -69,11 +73,15 @@ def download_omsz_data(path: str, from_time: str, to_time: str, period: int, log
 
     station_id_regex = re.compile(r'.*_(\d{5})_.*')
     historical_download_links = filter(lambda x: station_id_regex.match(x) is not None, historical_download_links)
-    historical_download_dict = {int(station_id_regex.match(link).group(1)): link for link in historical_download_links}
+    historical_download_dict = {
+            int(station_id_regex.match(link).group(1)): link for link in historical_download_links} # type: ignore
     recent_download_links = filter(lambda x: station_id_regex.match(x) is not None, recent_download_links)
-    recent_download_dict = {int(station_id_regex.match(link).group(1)): link for link in recent_download_links}
-
-    station_numbers = list(meta_data.index.values)
+    recent_download_dict = {
+            int(station_id_regex.match(link).group(1)): link for link in recent_download_links} # type: ignore
+    
+    station_numbers = []
+    if meta_data is not None:
+        station_numbers = list(meta_data.index.values)
 
     download_stations('historical', historical_download_dict, logger)
     download_stations('recent', recent_download_dict, logger)
@@ -104,9 +112,11 @@ def download_meta_data(path: str, period_type: PeriodType, logger: Logger) -> pd
 
 def load_meta(path: str) -> pd.DataFrame:
     meta = pd.read_csv(path, sep=';', skipinitialspace=True, na_values='EOR')
+    if meta is None:
+        raise Exception("Wrong csv")
     meta.columns = meta.columns.str.strip()
 
-    meta.index = meta['StationNumber']
+    meta.index = pd.Series(meta['StationNumber'])
     meta.drop('StationNumber', axis=1, inplace=True)
     meta.dropna(how='all', axis=1, inplace=True)
     meta = meta[~meta.index.duplicated(keep='last')]
@@ -115,7 +125,7 @@ def load_meta(path: str) -> pd.DataFrame:
     meta['EndDate'] = pd.to_datetime(meta['EndDate'], format='%Y%m%d')
 
     os.remove(path)
-    return meta
+    return pd.DataFrame(meta)
 
 
 def get_down_links(url: str, historical: bool) -> list[str]:
@@ -137,7 +147,7 @@ def get_down_links(url: str, historical: bool) -> list[str]:
 
 def download_stations(group: str, download_dict: dict[int, str], logger: Logger):
     for station_number, link in download_dict.items():
-        temp_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{group}_{station_number}.zip')
+        temp_path = os.path.join(str(os.getenv('TEMP_DATA_PATH')), f'{group}_{station_number}.zip')
         download(link, temp_path, logger)
 
 
@@ -158,10 +168,10 @@ def unpack_stations(group: str, station_numbers: list[int], logger: Logger):
     csv_paths = {}
 
     for station_number in station_numbers:
-        temp_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{group}_{station_number}.zip')
+        temp_path = os.path.join(str(os.getenv('TEMP_DATA_PATH')), f'{group}_{station_number}.zip')
         try:
             with ZipFile(temp_path, 'r') as zip_obj:
-                unzipped_path = os.path.join(os.getenv('TEMP_DATA_PATH'), f'{group}_{station_number}')
+                unzipped_path = os.path.join(str(os.getenv('TEMP_DATA_PATH')), f'{group}_{station_number}')
                 zip_obj.extractall(unzipped_path)
 
             csv_paths[station_number] = os.path.join(unzipped_path, os.listdir(unzipped_path)[0])
@@ -195,17 +205,18 @@ def concat_csvs(save_path: str,
 
 def format_csv(file_path: str, start_date: str, end_date: str, logger: Logger) -> pd.DataFrame | None:
     try:
-        df: pd.DataFrame = pd.read_csv(file_path,
-                                       skiprows=4,  # skip metadata of csv
-                                       sep=';',
-                                       skipinitialspace=True,
-                                       na_values=['EOR', -999],  # End Of Record is irrelevant, -999 means missing value
-                                       dtype=omsz_csv_type_dict
-                                       )
+        df: pd.DataFrame = pd.read_csv(
+                file_path,
+                skiprows=4, # skip metadata of csv
+                sep=';',
+                skipinitialspace=True,
+                na_values=['EOR', '-999', '######'], # End Of Record is irrelevant, -999 means missing value
+                dtype=omsz_csv_type_dict # type: ignore
+                ) # type: ignore
         df.columns = df.columns.str.strip()
 
         df['Time'] = pd.to_datetime(df['Time'], format='%Y%m%d%H%M', utc=False)
-        df.index = df['Time']
+        df.index = pd.Series(df['Time'])
         df.drop('Time', axis=1, inplace=True)
 
         # convert fxdat to minutes
@@ -245,7 +256,7 @@ def format_csv(file_path: str, start_date: str, end_date: str, logger: Logger) -
                  'Q_et5', 'Q_et10', 'Q_et20', 'Q_et50', 'Q_et100', 'Q_tsn', 'Q_tviz', 'EOR'],
                 axis=1, inplace=True, errors='ignore')
 
-        df = df[start_date:end_date]
+        df = pd.DataFrame(df[start_date:end_date])
         return df
     except Exception as e:
         logger.error(f'Exception {e} for {file_path}')

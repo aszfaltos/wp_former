@@ -7,7 +7,7 @@ from utils import Logger
 from data_handling import merge_data, regions
 
 
-def main(args: list):
+def main(args):
     logger = Logger('data_merger', logging.INFO)
 
     parser = arg.ArgumentParser(description='Merge meteorological data from OMSZ with wind power data from MAVIR.')

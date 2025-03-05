@@ -11,7 +11,7 @@ def download_data(path: str, from_time: str, to_time: str, period: int, logger: 
     download_mavir_data(os.path.join(path, 'mavir'), from_time, to_time, period, logger=logger)
 
 
-def main(args: list):
+def main(args):
     parser = arg.ArgumentParser(description='Download wind power data from MAVIR and meteorological data from OMSZ.')
     parser.add_argument('-p', '--path', type=str, help='Path to save the data.')
     parser.add_argument('-f', '--from_time', type=str, help='Start time in format "YYYY-MM-DD hh:mm:ss".')

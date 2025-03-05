@@ -47,7 +47,7 @@ class Trainer(ABC):
         self.logger = logger
 
         self.early_stopper = EarlyStopper(self.opts.early_stopping_patience, self.opts.early_stopping_min_delta)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9,
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.opts.learning_rate, betas=(0.9, 0.98), eps=1e-9,
                                     weight_decay=self.opts.weight_decay)
         self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, self.opts.learning_rate_decay)
 
@@ -58,7 +58,7 @@ class Trainer(ABC):
         valid_loader = DataLoader(valid_data, self.opts.batch_size)
         test_loader = DataLoader(test_data, self.opts.batch_size)
         self.logger.info(
-            f'Train size: {len(train_data)}, Validation size: {len(valid_data)}, Test size: {len(valid_data)}')
+            f'Train size: {len(train_data)}, Validation size: {len(valid_data)}, Test size: {len(test_data)}')
 
         last_epoch = 0
         time_sum = 0
@@ -123,7 +123,7 @@ class Trainer(ABC):
                          f' MAE: {round(mae_loss, 6)},')
 
     @abstractmethod
-    def _eval(self, data_loader, test: bool = False):
+    def _eval(self, data_loader, test: bool = False) -> tuple[float, float, float]:
         pass
 
     def _save_checkpoint(self, epoch):
@@ -147,7 +147,7 @@ class LSTMTrainer(Trainer):
         train_loss = 0.0
 
         for (batch_idx, (src_data, tgt_data)) in enumerate(train_loader):
-            output = self._inference_step(src_data, tgt_data.shape[1])
+            output = self._inference_step(src_data, tgt_data)
 
             loss = mse(output, tgt_data)
             train_loss += float(loss.item()) / len(train_loader)
@@ -171,7 +171,7 @@ class LSTMTrainer(Trainer):
 
         with torch.no_grad():
             for src_data, tgt_data in data_loader:
-                output = self._inference_step(src_data, tgt_data.shape[1])
+                output = self._inference_step(src_data, tgt_data, not test)
 
                 if test:
                     output, tgt_data = self.post_processor(output), self.post_processor(tgt_data)
@@ -182,12 +182,18 @@ class LSTMTrainer(Trainer):
 
         return mse_loss, math.sqrt(mse_loss), mae_loss
 
-    def _inference_step(self, src_data, gen_len):
+    def _inference_step(self, src_data, tgt_data, teacher_forcing=True):
         inp = src_data
-        for _ in range(gen_len):
-            out = self.model(inp)
-            inp = torch.cat((inp, out.unsqueeze(-2)), dim=1)
-        return inp[:, -gen_len:]
+        out = torch.zeros_like(tgt_data).to(DEVICE)
+        for idx, tgt_token in enumerate(tgt_data.transpose(0, 1)):
+            if teacher_forcing:
+                _out = self.model(inp)
+            else:
+                _out = self.model(torch.cat([inp, out], dim=1))
+            inp = torch.cat([inp, tgt_token.unsqueeze(0).transpose(0, 1)], dim=1)
+            out[:, idx, :] = _out
+
+        return out
 
 
 class TransformerTrainer(Trainer):
@@ -286,12 +292,15 @@ class TimeTokenTransformerTrainer(Trainer):
 
 
 class VPLSTMTrainer(LSTMTrainer):
-    def _inference_step(self, src_data, gen_len):
+    def _inference_step(self, src_data, tgt_data, teacher_forcing=True):
         inp = src_data
-        for i in range(gen_len):
-            if i == 0:
-                out = self.model(inp, True)
+        out = torch.zeros_like(tgt_data).to(DEVICE)
+        for idx, tgt_token in enumerate(tgt_data.transpose(0, 1)):
+            if teacher_forcing:
+                _out = self.model(inp, True)
             else:
-                out = self.model(inp)
-            inp = torch.cat((inp, out.unsqueeze(-2)), dim=1)
-        return inp[:, -gen_len:]
+                _out = self.model(torch.cat([inp, out], dim=1), True)
+            inp = torch.cat([inp, tgt_token.unsqueeze(0).transpose(0, 1)], dim=1)
+            out[:, idx, :] = _out
+
+        return out

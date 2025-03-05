@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, repeat
 
-
 import spacetimeformer as stf
 
 from .extra_layers import ConvBlock, Flatten

@@ -1,6 +1,7 @@
 import torch
 
 from models import LSTMModel, Transformer
+from models.vp_lstm import VPLSTMModel
 from .model_loader import load_model
 from trainer_lib.datasets import TimeSeriesWindowedTensorDataset
 import pandas as pd
@@ -11,16 +12,18 @@ import numpy as np
 
 class Evaluator:
     def __init__(self):
-        self.models: dict[str, torch.nn.Module] = {}
+        self.models: dict[str, list[torch.nn.Module]] = {}
+        self.model_params: dict[str, list[dict]] = {}
         self.forecasts = {}
         self.metrics = {}
 
     def add_model(self, path: str, epoch: int, load_fn: Callable, key: str) -> dict:
         params, model, metrics = load_model(path, epoch, load_fn)
-        if key in self.metrics.keys() or key in self.models.keys():
-            self.metrics[key], self.models[key] = [], []
-        self.metrics[key].append(metrics)
+        if key not in self.metrics.keys() or key not in self.models.keys() or key not in self.model_params.keys():
+            self.metrics[key], self.models[key], self.model_params[key] = [], [], []
+        self.model_params[key].append(params)
         self.models[key].append(model)
+        self.metrics[key].append(metrics)
         return params
 
     def rename_model(self, key: str, new_key: str):
@@ -45,7 +48,7 @@ class Evaluator:
 
         gt, f = [], []
 
-        if isinstance(model, LSTMModel):
+        if isinstance(model, LSTMModel) or isinstance(model, VPLSTMModel):
             gt, f = self._lstm_forecast(model, dataset, pred_len)
         elif isinstance(model, Transformer):
             gt, f = self._transformer_forecast(model, dataset, pred_len)
@@ -61,29 +64,20 @@ class Evaluator:
         return forecasts
 
     def generate_evaluation_table(self):
-        def bold_min(col):
-            bold = 'font-weight: bold'
-            default = ''
-
-            min_in_col = col[0].min()
-            return [bold if v == min_in_col else default for v in col]
-
         d = {'mse': [],
              'rmse': [],
              'mae': []}
 
         for key in self.list_models():
-            mse = np.array([metric['test']['MSE'][-1] for metric in self.metrics[key]])
-            rmse = np.array([metric['test']['RMSE'][-1] for metric in self.metrics[key]])
-            mae = np.array([metric['test']['MAE'][-1] for metric in self.metrics[key]])
+            mse = np.array([metric['eval']['MSE'][-1] for metric in self.metrics[key]])
+            rmse = np.array([metric['eval']['RMSE'][-1] for metric in self.metrics[key]])
+            mae = np.array([metric['eval']['MAE'][-1] for metric in self.metrics[key]])
 
-            d['mse'].append((mse.mean(), mse.std()))
-            d['rmse'].append((rmse.mean(), rmse.std()))
-            d['mae'].append((mae.mean(), mae.std()))
+            d['mse'].append(f"{mse.mean():0.4f} +- {mse.std():0.4f}")
+            d['rmse'].append(f"{rmse.mean():0.4f} +- {rmse.std():0.4f}")
+            d['mae'].append(f"{mae.mean():0.4f} +- {mae.std():0.4f}")
 
         df = pd.DataFrame(data=d, index=[key for key in self.list_models()])
-        df = df.style.apply(bold_min, axis=0)
-        df = df.apply(lambda row: f'{row[0]} +- {row[1]}', axis=1)
 
         return df
 
@@ -91,28 +85,36 @@ class Evaluator:
         for key in self.list_models():
             plt.title(f'{key} - learning curve')
             for idx, metric in enumerate(self.metrics[key]):
-                plt.plot(list(range(start, end)), metric['train']['MSE'][start:end], label=f'{idx} - train')
-                plt.plot(np.arange(max(start, 5), min(end, len(self.metrics[key]['train']['MSE'])), eval_steps),
-                         metric['eval']['MSE'][start//eval_steps:end//eval_steps], label=f'{idx} - eval')
+                print(self.model_params[key][idx])
+                plt.plot(np.arange(max(start, 5), min(end, len(metric['train']['MSE']))),
+                         metric['train']['MSE'][start:end],
+                         label=f'{idx} - train')
+                plt.plot(np.arange(max(start, 5), min(end, len(metric['train']['MSE'])), eval_steps),
+                         metric['eval']['MSE'][start//eval_steps:end//eval_steps],
+                         label=f'{idx} - eval')
             plt.legend()
             plt.show()
 
 
     @staticmethod
-    def _lstm_forecast(model: LSTMModel, dataset: TimeSeriesWindowedTensorDataset, pred_len: int):
+    def _lstm_forecast(model: LSTMModel | VPLSTMModel, dataset: TimeSeriesWindowedTensorDataset, pred_len: int):
         model.eval()
         with torch.no_grad():
             gt = []
             p = []
+
             for shift_offset in range(0, len(dataset), pred_len * dataset.ws_y):
                 src, tgt = dataset[shift_offset]
-                src.unsqueeze(0)
-                for i in range(pred_len):
-                    out = model(src)
-                    in_data = torch.concatenate((dataset[shift_offset][0].unsqueeze(0), out.unsqueeze(-2)), dim=1)
+                inp = src.unsqueeze(0) # type: ignore
+                for _ in range(pred_len):
+                    if isinstance(model, VPLSTMModel):
+                        out = model(inp, True)
+                    else:
+                        out = model(inp)
+                    inp = torch.concatenate((inp, out.unsqueeze(-2)), dim=1)
 
-                p.append(dataset.get_sequence_from_y_windows(in_data[:, -pred_len:, :].detach()).to('cpu'))
-                gt.append(dataset.get_sequence_from_y_windows(tgt).to('cpu'))
+                p.append(dataset.get_sequence_from_y_windows(inp[:, -pred_len:, :].detach()).to('cpu'))
+                gt.append(dataset.get_sequence_from_y_windows(torch.tensor(tgt)).to('cpu'))
 
         return gt, p
 

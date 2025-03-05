@@ -18,13 +18,13 @@ class GridSearchOptions:
     run_nums: int
     root_save_path: str
     valid_split: float
-    test_split: float
     random_seed: int
 
 
 class GridSearch(ABC):
     def __init__(self,
-                 dataset: TimeSeriesWindowedTensorDataset,
+                 train_dataset: TimeSeriesWindowedTensorDataset,
+                 test_dataset: TimeSeriesWindowedTensorDataset,
                  trainer_options: TrainerOptions,
                  search_options: GridSearchOptions,
                  logger: Logger | None = None):
@@ -39,21 +39,37 @@ class GridSearch(ABC):
             logger = Logger('grid_search')
         self.logger = logger
 
-        valid_size = int(round(len(dataset) * self.opts.valid_split))
-        test_size = int(round(len(dataset) * self.opts.test_split))
+        valid_size = int(round(len(train_dataset) * self.opts.valid_split))
 
         np.random.seed(self.opts.random_seed)
-        ind = np.random.permutation(len(dataset))
+        ind = np.random.permutation(len(train_dataset))
 
-        self.dataset = dataset
-        self.train_dataset = dataset[ind[:-valid_size - test_size]]
-        self.valid_dataset = dataset[ind[-valid_size - test_size:-test_size]]
-        self.test_dataset = dataset[ind[-test_size:]]
+        self.dataset = train_dataset
+        self.train_dataset = train_dataset[ind[:-valid_size]]
+        self.valid_dataset = train_dataset[ind[-valid_size:]]
+        self.test_dataset = test_dataset
 
     def search(self, grid: Grid):
         for idx, params in enumerate(grid):
             for n in range(self.opts.run_nums):
                 model = self.create_model(dict(params))
+                self.logger.info(f"Training model {idx + 1}/{len(grid)} with params: {params}")
+
+                self.trainer_options.save_path = os.path.join(os.path.abspath(self.opts.root_save_path),
+                                                                              str(idx), str(n))
+                os.makedirs(self.trainer_options.save_path, exist_ok=True)
+                with open(os.path.join(self.trainer_options.save_path, 'params.json'), "w") as fp:
+                    json.dump(params, fp)
+
+                self.train_model(model)
+
+    def random_search(self, grid: Grid, num_iters: int):
+        indeces = np.arange(len(grid))
+        indeces = np.random.permutation(indeces)
+        for idx in indeces[:num_iters]:
+            params = grid[idx]
+            for n in range(self.opts.run_nums):
+                model = self.create_model(params) # type: ignore
                 self.logger.info(f"Training model {idx + 1}/{len(grid)} with params: {params}")
 
                 self.trainer_options.save_path = os.path.join(os.path.abspath(self.opts.root_save_path),
@@ -95,11 +111,12 @@ class TransformerGridSearch(GridSearch):
 
 class TimeTokenTransformerGridSearch(GridSearch):
     def __init__(self,
-                 dataset: TimeSeriesWindowedTensorDataset,
+                 train_dataset: TimeSeriesWindowedTensorDataset,
+                 test_dataset: TimeSeriesWindowedTensorDataset,
                  trainer_options: TrainerOptions,
                  search_options: GridSearchOptions,
                  logger: Logger | None = None):
-        super(TimeTokenTransformerGridSearch, self).__init__(dataset, trainer_options, search_options, logger)
+        super(TimeTokenTransformerGridSearch, self).__init__(train_dataset, test_dataset, trainer_options, search_options, logger)
 
         self.vec_size_y = dataset.vec_size_y
 

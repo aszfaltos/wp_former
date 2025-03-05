@@ -4,6 +4,7 @@ from typing import Callable
 
 from torch import nn
 from models import Transformer, TransformerParams, VPTransformer, VPTransformerParams, LSTMParams, LSTMModel
+from models.vp_lstm import VPLSTMModel, VPLSTMParams
 from trainer_lib.utils import resume
 
 
@@ -32,6 +33,21 @@ def load_lstm(params):
         bidirectional=params['bidirectional']
     )
     return LSTMModel(lstm_params)
+
+
+def load_vp_lstm(params):
+    vp_lstm_params = VPLSTMParams(
+            vp_bases=params['vp_bases'],
+            vp_penalty=params['vp_penalty'],
+            in_features=params['in_features'],
+            hidden_size=params['hidden_size'],
+            num_layers=params['num_layers'],
+            out_features=params['out_features'],
+            dropout=params['dropout'],
+            in_noise=params['in_noise'],
+            hid_noise=params['hid_noise'],
+            bidirectional=params['bidirectional'])
+    return VPLSTMModel(vp_lstm_params)
 
 
 def load_transformer(params):
